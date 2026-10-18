@@ -166,7 +166,8 @@ elif [[ ! -f "$REPO_DIR/.env" ]]; then
   install -m 0600 "$REPO_DIR/.env.example" "$REPO_DIR/.env"
   log "created $REPO_DIR/.env from the example"
 fi
-if cmp -s "$REPO_DIR/.env" "$REPO_DIR/.env.example"; then
+# Placeholders from .env.example (changeme, CHANGE-ME) mean it isn't filled in.
+if grep -qiE "^[A-Z0-9_]+=[\"']?change-?me" "$REPO_DIR/.env"; then
   env_ready=0
 fi
 
@@ -203,15 +204,19 @@ DNSStubListener=no"; then
       systemctl restart systemd-resolved
     fi
   elif systemctl is-active --quiet NetworkManager; then
-    dev="$(ip -o route show default | awk '{print $5; exit}')"
-    con="$(nmcli -g GENERAL.CONNECTION device show "$dev")"
+    # Every active connection on a physical NIC, or DHCP DNS from the others
+    # would still end up in resolv.conf. (Docker's veths also look like
+    # ethernet, but have no backing device.)
     want="$(IFS=,; echo "${host_dns[*]}")|yes|yes"
-    have="$(nmcli -g ipv4.dns,ipv4.ignore-auto-dns,ipv6.ignore-auto-dns connection show "$con" | paste -sd'|' -)"
-    if [[ "$have" != "$want" ]]; then
-      nmcli connection modify "$con" ipv4.dns "${host_dns[*]}" ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes
-      nmcli device reapply "$dev"
-      log "set DNS on '$con' to ${host_dns[*]}"
-    fi
+    while IFS=: read -r con _ dev; do
+      [[ -e "/sys/class/net/$dev/device" ]] || continue
+      have="$(nmcli -g ipv4.dns,ipv4.ignore-auto-dns,ipv6.ignore-auto-dns connection show "$con" | paste -sd'|' -)"
+      if [[ "$have" != "$want" ]]; then
+        nmcli connection modify "$con" ipv4.dns "${host_dns[*]}" ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes
+        nmcli device reapply "$dev"
+        log "set DNS on '$con' to ${host_dns[*]}"
+      fi
+    done < <(nmcli -t -f NAME,TYPE,DEVICE connection show --active)
   else
     write_file /etc/resolv.conf "$(printf 'nameserver %s\n' "${host_dns[@]}")" || true
   fi
@@ -268,14 +273,14 @@ Environment=HOMELAB_BRANCH=$BRANCH" && units_changed=1
 fi
 ((units_changed)) && systemctl daemon-reload
 
-# Deploying with the unedited example .env would request certificates with
-# placeholder credentials, so hold off until it has been filled in.
+# Deploying with placeholder values would request certificates with fake
+# credentials, so hold off until .env has been filled in.
 if ((env_ready)); then
   systemctl enable --now homelab-sync.timer >/dev/null 2>&1
   systemctl start --no-block homelab-sync.service
   log "deploy timer enabled; follow with: journalctl -fu homelab-sync"
 else
-  log "edit $REPO_DIR/.env (or pass --env), then re-run to enable deploys"
+  log "fill in the placeholders in $REPO_DIR/.env (or pass --env), then re-run to enable deploys"
 fi
 
 ((reboot_required)) && log "reboot required to enable the memory cgroup"
