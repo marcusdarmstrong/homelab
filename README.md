@@ -135,7 +135,8 @@ Let's Encrypt needs no setup; Traefik registers automatically.
 
 Each host's config lives in your checkout as `hosts/<name>.env`, which is
 gitignored. That file is the **source of truth** for the host:
-`scripts/provision.sh <name>` pushes it to the host, and anything edited
+`scripts/provision.sh <name>` installs it when the host is set up,
+`scripts/push-env.sh <name>` pushes every later change, and anything edited
 directly on the host is overwritten by the next push. Back these files up to
 your password manager; they're the one part of the system that isn't in git.
 
@@ -145,16 +146,17 @@ your password manager; they're the one part of the system that isn't in git.
 2. Create `hosts/<name>.env` from [`.env.example`](.env.example), using
    `scripts/gen-secrets.sh` for the generated values. Leave the OIDC client
    fields empty for now.
-3. Run `scripts/provision.sh <name>`. On a new host it copies
+3. Run `scripts/provision.sh <name>`, once per image. It copies
    `bootstrap.sh` over, which installs Docker, clones this repo over HTTPS
    and enables the deploy timer; then it runs the first deploy and shows the
    result. sudo may ask for your password. Reboot if it asks (memory cgroup).
 4. Set up SSO (below) right away, add the client IDs and secrets to
-   `hosts/<name>.env`, and run `scripts/provision.sh <name>` again.
+   `hosts/<name>.env`, and run `scripts/push-env.sh <name>`.
 
-`provision.sh` validates the file first (no placeholders, and the compose
-config must resolve with it), prints which keys changed without printing any
-values, and reports the deploy's outcome.
+Both scripts validate the file first (no placeholders, and the compose config
+must resolve with it) and report the deploy's outcome. `push-env.sh` also
+prints which keys changed, without printing any values. `provision.sh`
+refuses a host that's already provisioned; after a re-image it runs again.
 
 `bootstrap.sh` is idempotent. Every deploy re-runs it when it, `lib.sh`,
 `systemd/`, `config/sdcard.env` or the host's `.env` changed since its last
@@ -201,7 +203,7 @@ users.
    Grafana is configured to send PKCE. tinyauth sends it too, so PKCE on its
    client should also work, but only "off" has been tested.
 4. Copy each client's ID and secret (Pocket ID shows the secret once) into
-   `hosts/<name>.env` and run `scripts/provision.sh <name>`. Members of
+   `hosts/<name>.env` and run `scripts/push-env.sh <name>`. Members of
    `admins` get the Grafana Admin role; anyone else who logs in gets Viewer.
 
 ### Alerts on your phone
@@ -290,9 +292,9 @@ check what you restored. Running `restic check` occasionally is worthwhile.
 | Change a service | Edit `stacks/…`, open a PR, merge |
 | Add a service | Add it to a stack (or a new `stacks/<x>/compose.yaml` listed in `compose.yaml`) with a `profiles:` entry, Traefik labels (`sso@docker` for admin UIs) and optionally `homelab.metrics.port` |
 | Enable something on a host | Add its profile to that host's `COMPOSE_PROFILES` |
-| Change host config | Edit `hosts/<name>.env`, then `scripts/provision.sh <name>` |
+| Change host config | Edit `hosts/<name>.env`, then `scripts/push-env.sh <name>` |
 | Roll back | `git revert` and push |
-| Deploy now | `scripts/provision.sh <name>`, or on the host `sudo /opt/homelab/scripts/sync.sh --force` |
+| Deploy now | On the host, `sudo /opt/homelab/scripts/sync.sh --force` (otherwise within a minute) |
 | Validate locally | `scripts/validate.sh` (needs Docker) |
 | Smoke-test the whole stack | `test/smoke.sh` on any Docker host with ports 80/443/1053 free (`--down` to remove) |
 
@@ -328,7 +330,8 @@ stacks/tailscale/         profile: tailscale
 stacks/backup/            profile: backup
 stacks/unifi/             profile: unifi
 stacks/smart/             profile: smart (locally built image)
-scripts/provision.sh      push a host's env and deploy (runs bootstrap)
+scripts/provision.sh      set up a freshly imaged host (runs bootstrap)
+scripts/push-env.sh       push a host's env and deploy
 scripts/bootstrap.sh      idempotent host provisioning, on the host
 scripts/sync.sh           git poll → apply (systemd timer)
 scripts/apply.sh          docker compose converge
