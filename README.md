@@ -68,8 +68,9 @@ once for each site, which keeps the sites independent.
      within a minute.
    - Install the [Renovate](https://github.com/apps/renovate) app on the repo
      for image-update PRs.
-2. **Cloudflare DNS.** A domain in a Cloudflare zone, with a subdomain per site
-   (e.g. `home.example.com`, `basecamp.example.com`). No DNS records are needed;
+2. **Cloudflare DNS.** A domain in a Cloudflare zone. Each host gets a
+   subdomain named after it, and its services live under that
+   (`pihole.luna.example.com`). No DNS records are needed;
    Traefik only creates temporary TXT records for the DNS-01 challenge.
    - Prefer a dedicated domain for the homelab. Cloudflare can't scope a token
      to a subdomain, so each Pi holds a token that can edit the whole zone. A
@@ -110,7 +111,8 @@ once for each site, which keeps the sites independent.
    `TS_AUTHKEY=tskey-client-…?ephemeral=false&preauthorized=true`. Without
    `ephemeral=false`, OAuth-issued nodes are ephemeral and vanish from the
    tailnet whenever the Pi goes offline. Then add a split-DNS nameserver
-   (*DNS → Add nameserver → Custom*): `BASE_DOMAIN` → the site's `HOST_IP`.
+   (*DNS → Add nameserver → Custom*) for each host: its `BASE_DOMAIN` → its
+   `HOST_IP`.
 7. **UniFi**, on the site's console:
    - a DHCP reservation for the Pi (`HOST_IP`)
    - DHCP DNS: the Pi first, plus a second resolver so the network survives a
@@ -207,7 +209,7 @@ logins fail. Nothing else depends on it.
    | grafana  | `https://grafana.*.ZONE/login/generic_oauth`       | on   | `GRAFANA_OIDC_CLIENT_*`  |
 
    `ZONE` is the part every host's `BASE_DOMAIN` shares (for
-   `home.example.com`, `example.com`). Pocket ID's `*` matches one hostname
+   `luna.example.com`, `example.com`). Pocket ID's `*` matches one hostname
    label, so the same two clients serve every host at the site with no
    per-host setup.
 
