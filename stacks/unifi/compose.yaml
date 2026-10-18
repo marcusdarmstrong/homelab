@@ -1,0 +1,24 @@
+# UniFi controller metrics (APs, switches, PoE, clients). Profile: unifi
+# Needs the observability profile to be useful.
+#
+# Authenticates with a UniFi API key (UniFi Network > Settings > Control
+# Plane > Integrations), so no controller account or password is involved.
+
+services:
+  unpoller:
+    image: ghcr.io/unpoller/unpoller:v5.4.0
+    restart: unless-stopped
+    profiles: [unifi]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      UP_UNIFI_DEFAULT_URL: ${UNIFI_URL:-}
+      UP_UNIFI_DEFAULT_API_KEY: ${UNIFI_API_KEY:-}
+      # UniFi consoles serve a self-signed certificate.
+      UP_UNIFI_DEFAULT_VERIFY_SSL: "false"
+      UP_UNIFI_DEFAULT_SAVE_SITES: "true"
+      UP_INFLUXDB_DISABLE: "true"
+      UP_PROMETHEUS_HTTP_LISTEN: 0.0.0.0:9130
+      UP_POLLER_QUIET: "true"
+    labels:
+      - homelab.metrics.port=9130

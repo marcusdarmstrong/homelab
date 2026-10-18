@@ -1,0 +1,38 @@
+// Renovate opens a PR whenever an image in stacks/*/compose.yaml (or a
+// version pinned in a Dockerfile) has a new release. Merging it is the
+// deploy. Install the Renovate GitHub app on this repo to enable.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:recommended"],
+  dependencyDashboard: true,
+  // Let releases age before proposing them.
+  minimumReleaseAge: "14 days",
+  customManagers: [
+    {
+      // `# renovate: datasource=... depName=...` above an ARG in a Dockerfile.
+      customType: "regex",
+      managerFilePatterns: ["/(^|/)Dockerfile$/"],
+      matchStrings: [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\nARG \\w+=(?<currentValue>\\S+)",
+      ],
+      extractVersionTemplate: "^v?(?<version>.*)$",
+    },
+  ],
+  packageRules: [
+    {
+      matchManagers: ["docker-compose"],
+      matchPackageNames: ["grafana/**", "prom/**"],
+      groupName: "observability",
+    },
+    {
+      matchPackageNames: ["ghcr.io/pocket-id/**", "ghcr.io/tinyauthapp/**"],
+      groupName: "sso",
+    },
+    // Patch updates merge themselves once CI passes. Delete this rule to
+    // review everything by hand.
+    {
+      matchUpdateTypes: ["patch"],
+      automerge: true,
+    },
+  ],
+}

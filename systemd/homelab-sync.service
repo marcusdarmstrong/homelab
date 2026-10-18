@@ -1,0 +1,10 @@
+[Unit]
+Description=Sync homelab repo and converge docker compose stacks
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=@REPO_DIR@/scripts/sync.sh
+# A first deploy on a slow link can take a while to pull images.
+TimeoutStartSec=30min

@@ -1,0 +1,5 @@
+# Prometheus only stores and serves here. Alloy does all scraping (host,
+# containers, labelled services, probes) and pushes via remote-write.
+
+global:
+  evaluation_interval: 30s

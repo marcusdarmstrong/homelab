@@ -1,0 +1,53 @@
+# Overrides for running the stack on Docker Desktop (test/smoke.sh).
+# Relative paths resolve against the repo root.
+#
+# - Pi-only host mounts (journal, disks, host root) are dropped, and Pi-hole
+#   listens on 1053.
+# - Apps calling Pocket ID server-side skip TLS verification, since Traefik
+#   serves its self-signed default certificate locally.
+# - Grafana's admin API is enabled so the test can inspect provisioning.
+
+services:
+  # Port 53 is usually taken on a Mac.
+  pihole:
+    ports: !override
+      - "1053:53/tcp"
+      - "1053:53/udp"
+
+  pocket-id:
+    environment:
+      STATIC_API_KEY: ${POCKET_ID_STATIC_API_KEY}
+
+  tinyauth:
+    environment:
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_INSECURE: "true"
+
+  grafana:
+    environment:
+      GF_AUTH_GENERIC_OAUTH_TLS_SKIP_VERIFY_INSECURE: "true"
+      GF_AUTH_BASIC_ENABLED: "true"
+      GF_SECURITY_ADMIN_PASSWORD: local
+
+  alloy:
+    volumes: !override
+      - ./stacks/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - local-metrics:/host/root/var/lib/homelab/metrics
+
+  backup:
+    environment:
+      # Don't back the local test repository up into itself.
+      RESTIC_BACKUP_ARGS: --tag homelab --exclude /source/homelab_local-restic --exclude /source/homelab_restic-cache --exclude /source/homelab_grafana-data/_data/plugins
+    volumes: !override
+      - /var/lib/docker/volumes:/source:ro
+      - local-metrics:/metrics
+      - local-restic:/restic
+      - restic-cache:/root/.cache/restic
+
+volumes:
+  local-metrics:
+  local-restic:

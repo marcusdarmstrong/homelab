@@ -1,0 +1,45 @@
+# Nightly restic snapshots of this host's Docker volumes. Profile: backup
+#
+# Rebuilding a host = bootstrap.sh + restore (see README). Excluded:
+# Prometheus/Loki data (large, and only history), Pi-hole's long-term query
+# database, Grafana's plugin cache and restic's own cache. Restic
+# deduplicates, so nightly runs are cheap.
+#
+# A run can end "incomplete" when a file (e.g. a SQLite journal) vanishes
+# mid-read; that records a failure, but only a stale last success alerts.
+#
+# Success/failure timestamps go to the textfile collector, and Grafana alerts
+# when the last success is too old.
+
+services:
+  backup:
+    image: mazzolino/restic:1.8.2
+    restart: unless-stopped
+    profiles: [backup]
+    # restic records the hostname in each snapshot.
+    hostname: ${HOST_NAME:?}
+    environment:
+      TZ: ${TZ:-UTC}
+      BACKUP_CRON: ${BACKUP_CRON:-0 30 3 * * *}
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: ${RESTIC_S3_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${RESTIC_S3_SECRET_ACCESS_KEY:-}
+      RESTIC_BACKUP_SOURCES: /source
+      RESTIC_BACKUP_ARGS: >-
+        --tag homelab
+        --exclude /source/homelab_prometheus-data
+        --exclude /source/homelab_loki-data
+        --exclude /source/homelab_pihole-data/_data/pihole-FTL.db
+        --exclude /source/homelab_grafana-data/_data/plugins
+        --exclude /source/homelab_restic-cache
+      RESTIC_FORGET_ARGS: --prune --keep-daily 7 --keep-weekly 5 --keep-monthly 12
+      POST_COMMANDS_SUCCESS: echo "homelab_backup_last_success_timestamp_seconds $$(date +%s)" > /metrics/backup_success.prom
+      POST_COMMANDS_FAILURE: echo "homelab_backup_last_failure_timestamp_seconds $$(date +%s)" > /metrics/backup_failure.prom
+    volumes:
+      - /var/lib/docker/volumes:/source:ro
+      - /var/lib/homelab/metrics:/metrics
+      - restic-cache:/root/.cache/restic
+
+volumes:
+  restic-cache:

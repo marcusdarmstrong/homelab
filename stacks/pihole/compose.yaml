@@ -1,0 +1,45 @@
+# Pi-hole v6 DNS sinkhole. Profile: dns
+#
+# Port 53 is published directly on the host. The web UI is only reachable
+# through Traefik at https://pihole.BASE_DOMAIN, behind SSO, so Pi-hole's own
+# password is disabled.
+#
+# Settings passed as FTLCONF_* variables are managed by git and show as
+# read-only in the web UI. Anything not set here (blocklists, groups, clients)
+# can still be changed in the UI and lives in the pihole-data volume.
+
+services:
+  pihole:
+    image: pihole/pihole:2026.09.0
+    restart: unless-stopped
+    profiles: [dns]
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+    environment:
+      TZ: ${TZ:-UTC}
+      FTLCONF_webserver_api_password: ""
+      FTLCONF_webserver_port: "80"
+      # Docker NATs queries, so Pi-hole sees them arriving from the bridge
+      # network rather than the LAN.
+      FTLCONF_dns_listeningMode: all
+      FTLCONF_dns_upstreams: ${PIHOLE_UPSTREAMS:-1.1.1.1;1.0.0.1}
+      # Semicolon-separated dnsmasq lines; by default, resolve *.BASE_DOMAIN
+      # to this host.
+      FTLCONF_misc_dnsmasq_lines: ${PIHOLE_DNSMASQ_LINES:-address=/${BASE_DOMAIN}/${HOST_IP}}
+      # The host keeps time (systemd-timesyncd); a container can't set the clock.
+      FTLCONF_ntp_sync_active: "false"
+    volumes:
+      - pihole-data:/etc/pihole
+    cap_add:
+      - SYS_NICE
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pihole.rule=Host(`pihole.${BASE_DOMAIN}`)
+      - traefik.http.routers.pihole.middlewares=sso@docker,pihole-admin
+      - traefik.http.services.pihole.loadbalancer.server.port=80
+      - traefik.http.middlewares.pihole-admin.redirectregex.regex=^(https://[^/]+)/?$$
+      - traefik.http.middlewares.pihole-admin.redirectregex.replacement=$${1}/admin/
+
+volumes:
+  pihole-data:

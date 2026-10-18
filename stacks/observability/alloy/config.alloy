@@ -1,0 +1,239 @@
+// Grafana Alloy pipeline for this site: collect host, container, service,
+// WAN-probe and log data and push it to the local Prometheus/Loki. Every
+// series and stream is tagged with `host` and `site` from the environment.
+
+// ---------------------------------------------------------------- metrics
+
+// Built-in exporters label their targets job="integrations/...", which
+// overrides a scrape's job_name, so each gets a relabel to a plain job.
+
+prometheus.exporter.unix "host" {
+	procfs_path = "/host/proc"
+	sysfs_path  = "/host/sys"
+	rootfs_path = "/host/root"
+	// Disk metadata (model, serial) from the host's udev database.
+	udev_data_path = "/host/root/run/udev/data"
+
+	filesystem {
+		mount_points_exclude = "^/(dev|proc|run|sys|var/lib/docker/.+)($|/)"
+		fs_types_exclude     = "^(autofs|binfmt_misc|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|pstore|securityfs|squashfs|sysfs|tmpfs|tracefs)$"
+	}
+
+	// Written by scripts/sync.sh (deploy status) and the backup container.
+	textfile {
+		directory = "/host/root/var/lib/homelab/metrics"
+	}
+}
+
+discovery.relabel "node" {
+	targets = prometheus.exporter.unix.host.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "node"
+	}
+}
+
+prometheus.scrape "host" {
+	targets    = discovery.relabel.node.output
+	forward_to = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.exporter.cadvisor "containers" {
+	docker_host      = "tcp://docker-proxy:2375"
+	docker_only      = true
+	storage_duration = "5m"
+}
+
+discovery.relabel "cadvisor" {
+	targets = prometheus.exporter.cadvisor.containers.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "cadvisor"
+	}
+}
+
+prometheus.scrape "containers" {
+	targets    = discovery.relabel.cadvisor.output
+	forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// Internet reachability from this site.
+prometheus.exporter.blackbox "wan" {
+	config = "{ modules: { icmp: { prober: icmp, timeout: 5s }, https: { prober: http, timeout: 10s } } }"
+
+	target {
+		name    = "cloudflare-dns"
+		address = "1.1.1.1"
+		module  = "icmp"
+	}
+
+	target {
+		name    = "google-dns"
+		address = "8.8.8.8"
+		module  = "icmp"
+	}
+
+	target {
+		name    = "github"
+		address = "https://github.com"
+		module  = "https"
+	}
+}
+
+discovery.relabel "wan" {
+	targets = prometheus.exporter.blackbox.wan.targets
+
+	// The probe name only lives in the exporter's job label; keep it.
+	rule {
+		source_labels = ["job"]
+		regex         = "integrations/blackbox/(.+)"
+		target_label  = "probe"
+	}
+
+	rule {
+		target_label = "job"
+		replacement  = "wan"
+	}
+}
+
+prometheus.scrape "wan" {
+	targets    = discovery.relabel.wan.output
+	forward_to = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.exporter.self "alloy" { }
+
+discovery.relabel "alloy" {
+	targets = prometheus.exporter.self.alloy.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "alloy"
+	}
+}
+
+prometheus.scrape "alloy" {
+	targets    = discovery.relabel.alloy.output
+	forward_to = [prometheus.remote_write.local.receiver]
+}
+
+// Any container with a `homelab.metrics.port` label.
+discovery.docker "containers" {
+	host = "tcp://docker-proxy:2375"
+}
+
+discovery.relabel "labelled" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_label_homelab_metrics_port"]
+		regex         = ".+"
+		action        = "keep"
+	}
+
+	// One target per container: the address on the project network.
+	rule {
+		source_labels = ["__meta_docker_network_name"]
+		regex         = "homelab_default"
+		action        = "keep"
+	}
+
+	// A container that is restarting has no address yet.
+	rule {
+		source_labels = ["__meta_docker_network_ip"]
+		regex         = ".+"
+		action        = "keep"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_network_ip", "__meta_docker_container_label_homelab_metrics_port"]
+		separator     = ":"
+		target_label  = "__address__"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_homelab_metrics_path"]
+		regex         = "(.+)"
+		target_label  = "__metrics_path__"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "job"
+	}
+}
+
+prometheus.scrape "labelled" {
+	targets    = discovery.relabel.labelled.output
+	forward_to = [prometheus.remote_write.local.receiver]
+}
+
+prometheus.remote_write "local" {
+	endpoint {
+		url = "http://prometheus:9090/api/v1/write"
+	}
+
+	external_labels = {
+		host = sys.env("HOST_NAME"),
+		site = sys.env("SITE"),
+	}
+}
+
+// ------------------------------------------------------------------- logs
+
+discovery.relabel "logs" {
+	targets = []
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		target_label  = "service"
+	}
+}
+
+loki.source.docker "containers" {
+	host          = "tcp://docker-proxy:2375"
+	targets       = discovery.docker.containers.targets
+	labels        = {"job" = "docker"}
+	relabel_rules = discovery.relabel.logs.rules
+	forward_to    = [loki.write.local.receiver]
+}
+
+loki.relabel "journal" {
+	forward_to = []
+
+	rule {
+		source_labels = ["__journal__systemd_unit"]
+		target_label  = "unit"
+	}
+
+	rule {
+		source_labels = ["__journal_priority_keyword"]
+		target_label  = "level"
+	}
+}
+
+loki.source.journal "system" {
+	max_age       = "12h"
+	labels        = {"job" = "journal"}
+	relabel_rules = loki.relabel.journal.rules
+	forward_to    = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+
+	external_labels = {
+		host = sys.env("HOST_NAME"),
+		site = sys.env("SITE"),
+	}
+}

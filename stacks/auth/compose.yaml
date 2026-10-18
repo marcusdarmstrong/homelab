@@ -1,0 +1,74 @@
+# Passwordless single sign-on. Always on.
+#
+# Pocket ID (https://id.BASE_DOMAIN) is an OIDC provider that only accepts
+# passkeys, so any WebAuthn authenticator works (1Password, Bitwarden, iCloud
+# Keychain, a YubiKey, ...). Passkeys are bound to this site's domain, so
+# each site keeps its own users.
+#
+# tinyauth (https://auth.BASE_DOMAIN) turns that into a Traefik forward-auth
+# middleware, `sso@docker`, for apps without their own OIDC support. Apps
+# that speak OIDC natively (Grafana) talk to Pocket ID directly.
+#
+# One-time setup per site: see "Single sign-on" in the README.
+
+services:
+  pocket-id:
+    image: ghcr.io/pocket-id/pocket-id:v2.17.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      APP_URL: https://id.${BASE_DOMAIN}
+      TRUST_PROXY: ${DOCKER_SUBNET:-172.30.0.0/24}
+      ENCRYPTION_KEY: ${POCKET_ID_ENCRYPTION_KEY:?}
+      ANALYTICS_DISABLED: "true"
+      # Renovate tracks releases.
+      VERSION_CHECK_DISABLED: "true"
+      OTEL_METRICS_EXPORTER: prometheus
+      OTEL_EXPORTER_PROMETHEUS_HOST: 0.0.0.0
+    volumes:
+      - pocket-id-data:/app/data
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pocket-id.rule=Host(`id.${BASE_DOMAIN}`)
+      - traefik.http.services.pocket-id.loadbalancer.server.port=1411
+      - homelab.metrics.port=9464
+
+  tinyauth:
+    image: ghcr.io/tinyauthapp/tinyauth:v5.2.0
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - pocket-id
+    environment:
+      TINYAUTH_APPURL: https://auth.${BASE_DOMAIN}
+      TINYAUTH_AUTH_TRUSTEDPROXIES: ${DOCKER_SUBNET:-172.30.0.0/24}
+      TINYAUTH_AUTH_SECURECOOKIE: "true"
+      # Reads per-app access rules from container labels via the proxy.
+      DOCKER_HOST: tcp://docker-proxy:2375
+      # No local users: Pocket ID is the only way in.
+      TINYAUTH_OAUTH_AUTOREDIRECT: pocketid
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_NAME: Pocket ID
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTID: ${TINYAUTH_OIDC_CLIENT_ID:-}
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTSECRET: ${TINYAUTH_OIDC_CLIENT_SECRET:-}
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_AUTHURL: https://id.${BASE_DOMAIN}/authorize
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_TOKENURL: https://id.${BASE_DOMAIN}/api/oidc/token
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_USERINFOURL: https://id.${BASE_DOMAIN}/api/oidc/userinfo
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_REDIRECTURL: https://auth.${BASE_DOMAIN}/api/oauth/callback/pocketid
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_SCOPES: openid email profile groups
+    volumes:
+      - tinyauth-data:/data
+    networks:
+      - default
+      - docker-api
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tinyauth.rule=Host(`auth.${BASE_DOMAIN}`)
+      - traefik.http.services.tinyauth.loadbalancer.server.port=3000
+      - traefik.http.middlewares.sso.forwardauth.address=http://tinyauth:3000/api/auth/traefik
+      - traefik.http.middlewares.sso.forwardauth.authResponseHeaders=Remote-User,Remote-Email,Remote-Name,Remote-Groups
+
+volumes:
+  pocket-id-data:
+  tinyauth-data:

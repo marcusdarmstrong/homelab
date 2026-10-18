@@ -1,0 +1,38 @@
+# The whole homelab is one compose project. Every host runs the same code; its
+# .env decides what runs there:
+#
+#   COMPOSE_PROFILES=dns,observability,backup
+#
+# Each site is self-contained: nothing here talks to another site.
+#
+# Always on:      traefik, docker-proxy, pocket-id, tinyauth
+# Profiles:
+#   dns            Pi-hole
+#   observability  Prometheus, Loki, Grafana, Alloy, ntfy (alerts)
+#   tailscale      remote access + LAN subnet route
+#   backup         nightly restic snapshots of the Docker volumes
+#   unifi          UniFi controller metrics (needs observability)
+#   smart          NVMe/disk SMART metrics (needs observability)
+
+name: homelab
+
+include:
+  - stacks/traefik/compose.yaml
+  - stacks/auth/compose.yaml
+  - stacks/pihole/compose.yaml
+  - stacks/observability/compose.yaml
+  - stacks/tailscale/compose.yaml
+  - stacks/backup/compose.yaml
+  - stacks/unifi/compose.yaml
+  - stacks/smart/compose.yaml
+
+networks:
+  # Fixed subnet so Pocket ID and tinyauth can trust forwarded headers from
+  # Traefik (and nothing outside the project).
+  default:
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.30.0.0/24}
+  # Only the read-only Docker API proxy and its few clients live here.
+  docker-api:
+    internal: true

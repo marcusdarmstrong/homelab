@@ -1,0 +1,232 @@
+# homelab
+
+Docker Compose config for my Raspberry Pis, deployed GitOps-style: push to
+`main` and every host converges within about a minute.
+
+| Host      | Hardware    | Site  | `COMPOSE_PROFILES` (suggested)                         |
+|-----------|-------------|-------|--------------------------------------------------------|
+| primary   | Pi 4        | home  | `dns,tailscale,backup`                                 |
+| secondary | Pi 5 + NVMe | cabin | `dns,observability,tailscale,backup,unifi,smart`       |
+
+## How it works
+
+The repo is one Compose project (`compose.yaml` includes `stacks/*/compose.yaml`).
+Every host runs the same code. A host's gitignored `.env` is its entire
+configuration, including which **profiles** it runs. **Sites are
+independent:** no service talks to another site.
+
+| Profile         | Services                                         |
+|-----------------|--------------------------------------------------|
+| _(always)_      | Traefik, Docker API proxy, Pocket ID, tinyauth   |
+| `dns`           | Pi-hole                                          |
+| `observability` | Prometheus, Loki, Grafana, Alloy, ntfy           |
+| `tailscale`     | Tailscale (remote access, LAN subnet route)      |
+| `backup`        | restic snapshots of the Docker volumes           |
+| `unifi`         | UnPoller (UniFi metrics)                         |
+| `smart`         | smartctl_exporter (NVMe/disk health)             |
+
+- **Deploys**: `scripts/sync.sh` runs every minute from a systemd timer. It
+  hard-resets to `origin/main` and runs `scripts/apply.sh` whenever the commit
+  or `.env` differs from the last successful apply. Services whose profile was
+  turned off are stopped. A failed apply retries on the next tick and raises
+  the "Deploy failing" alert. Deploys are pull-based, so nothing has to accept
+  inbound connections.
+- **Image updates**: images are pinned to exact tags. Renovate opens a PR for
+  each release once it's 14 days old, and merging the PR deploys it. Patch
+  releases automerge once CI passes (see `renovate.json5`).
+- **HTTPS**: Traefik issues a wildcard Let's Encrypt cert for `*.BASE_DOMAIN`
+  through the DNS-01 challenge (Cloudflare by default), so services don't need
+  to be internet-exposed. Renewal is automatic, and an alert fires if it falls
+  behind.
+- **SSO, no passwords**: Pocket ID is a passkey-only OIDC provider, so
+  1Password, Bitwarden, iCloud Keychain or a hardware key all work. Grafana
+  logs in through it directly. Everything else (Traefik, Pi-hole, Prometheus,
+  Alloy) sits behind tinyauth's `sso@docker` forward-auth middleware. No app
+  has a password of its own.
+- **Observability**: Alloy collects host, container, Traefik and labelled
+  service metrics, WAN probes, Docker logs and the systemd journal. It pushes
+  them to the site's own Prometheus and Loki. Add metrics for any container
+  with a `homelab.metrics.port` label.
+- **Alerting**: Grafana alert rules (`provisioning/alerting/`) notify through
+  the site's ntfy server: disk, memory, temperature, scrape targets, deploys,
+  backups, cert expiry, WAN, SMART and OS updates.
+- **OS updates**: unattended-upgrades applies everything from the Debian,
+  Raspberry Pi and Docker repos daily, and reboots in a set window when a
+  kernel or firmware update needs it.
+
+## Setting up a host
+
+**Prerequisites (once):**
+
+1. A domain on Cloudflare, with a subdomain per site (e.g. `home.example.com`,
+   `cabin.example.com`). No DNS records are needed; Traefik only creates
+   temporary TXT records. Create an API token with *Zone → DNS → Edit*.
+2. A static IP or DHCP reservation for each Pi. Use distinct LAN subnets per
+   site if both will advertise Tailscale routes.
+
+**Per host:**
+
+1. Flash 64-bit Raspberry Pi OS Lite. On the Pi 5, boot from the NVMe.
+2. Write the host's `.env` from [`.env.example`](.env.example). Use
+   `scripts/gen-secrets.sh` for the generated values and store
+   `POCKET_ID_ENCRYPTION_KEY` and `RESTIC_PASSWORD` in your password manager.
+   Leave the OIDC client fields empty for now.
+3. Copy the script and env over, then run it:
+
+   ```sh
+   scp scripts/bootstrap.sh primary.env pi@<host>:
+   ssh pi@<host> sudo ./bootstrap.sh --repo git@github.com:<you>/homelab.git --env primary.env
+   ```
+
+   On the first run against a private repo the script prints a deploy key and
+   stops. Add the key under *Settings → Deploy keys* (read-only), then re-run.
+   Reboot if asked (memory cgroup).
+4. Watch the first deploy: `journalctl -fu homelab-sync`.
+5. Set up SSO (below), then point the site's UniFi DHCP DNS at the Pi. Add a
+   second resolver too, so the network survives a Pi reboot.
+
+`bootstrap.sh` is idempotent, and re-running it is how changes to it get
+applied. It:
+
+- installs Docker from Docker's apt repo, with log rotation and `live-restore`
+- enables the memory cgroup and IPv4 forwarding
+- enables OS auto-updates with reboots (see below)
+- sets the hostname and the Pi's own DNS from `HOST_NAME` and `HOST_DNS`
+- clones the repo to `/opt/homelab`, installs `.env`, and enables the timer
+
+The Pi resolves through fixed upstreams rather than its own Pi-hole, so it can
+still pull images and sync git while Pi-hole restarts. Containers that need
+`*.BASE_DOMAIN` names reach them through Traefik network aliases, not host DNS.
+
+Set the ACME staging CA in `.env` (`ACME_CA_SERVER`) while you get things
+working, then remove it. Let's Encrypt rate-limits failed production attempts.
+
+### Single sign-on (once per site)
+
+Passkeys are bound to the site's domain, so each site has its own Pocket ID
+users.
+
+1. Right after the first deploy, open `https://id.BASE_DOMAIN/setup` and
+   register the admin passkey. Do this promptly: until someone does, anyone on
+   the LAN could claim the admin account.
+2. Create an `admins` group. Add users for yourself and your partner, and send
+   them their one-time login link to enroll a passkey from their own password
+   manager.
+3. Create two OIDC clients, both restricted to the `admins` group:
+
+   | Client   | Callback URL                                          | `.env` keys                  |
+   |----------|-------------------------------------------------------|------------------------------|
+   | tinyauth | `https://auth.BASE_DOMAIN/api/oauth/callback/pocketid` | `TINYAUTH_OIDC_CLIENT_*`     |
+   | grafana  | `https://grafana.BASE_DOMAIN/login/generic_oauth`     | `GRAFANA_OIDC_CLIENT_*`      |
+
+4. Put the IDs and secrets in `/opt/homelab/.env`. The next sync tick
+   redeploys with them. Members of `admins` get the Grafana Admin role; anyone
+   else who logs in gets Viewer.
+
+### Alerts on your phone
+
+Install the ntfy app, add the server `https://ntfy.BASE_DOMAIN`, and subscribe
+to `homelab-alerts`. Reading needs no credentials. Only Grafana's token can
+publish, and the server is reachable only on the LAN or over Tailscale.
+
+Alerts are evaluated on the same Pi they describe, so a host that's
+completely down or offline can't page you. For that, add an external
+dead-man's switch (e.g. healthchecks.io) if you want it.
+
+### OS updates
+
+Upgrades run daily at `OS_UPGRADE_TIME` (default 04:00, after the 03:30
+backup). That covers Debian (including security and point-release updates),
+the Raspberry Pi repo (kernel, firmware, bootloader) and Docker. When an update
+needs a reboot, the Pi reboots at `OS_REBOOT_TIME` (default 04:30); set
+`OS_AUTO_REBOOT=false` to do it by hand. A reboot means a minute or two
+without DNS from that Pi. Docker engine upgrades don't stop containers
+(`live-restore`).
+
+"OS auto-update failed" and "Reboot pending" (more than 2 days) alerts cover
+the failure cases. These settings are host config, but they're applied by
+`bootstrap.sh`, not the deploy timer, so re-run bootstrap after changing them.
+Logs: `journalctl -u apt-daily-upgrade`.
+
+### Tailscale
+
+Create an OAuth client (or auth key) tagged `tag:homelab` for `TS_AUTHKEY`, set
+`TS_ROUTES` to the site's LAN, and approve the route in the admin console.
+For remote name resolution, add a split-DNS nameserver: `BASE_DOMAIN` →
+the site's `HOST_IP`.
+
+### Backups and restore
+
+Nightly at 03:30 by default. Everything in the Docker volumes is backed up
+except Prometheus/Loki data and Pi-hole's query history. To rebuild a dead
+host: bootstrap it with the same `.env`, let the first deploy finish, then
+`sudo /opt/homelab/scripts/restore.sh`. Pass volume names (e.g.
+`pocket-id-data`) to restore only those.
+
+SQLite databases are copied live. That's fine for these low-write apps, but
+check what you restored. Running `restic check` occasionally is worthwhile.
+
+### Migrating the existing Pi 4 Pi-hole
+
+1. In the old Pi-hole: *Settings → Teleporter → Export*.
+2. Stop the native install so port 53 is free: `sudo systemctl disable --now pihole-FTL`
+   (or stop its container).
+3. Bootstrap the host as above, then import the Teleporter archive at
+   `https://pihole.BASE_DOMAIN`. Settings managed through `FTLCONF_*` take
+   precedence and show as read-only in the UI.
+
+## Day to day
+
+| Task | How |
+|------|-----|
+| Change a service | Edit `stacks/…`, open a PR, merge |
+| Add a service | Add it to a stack (or a new `stacks/<x>/compose.yaml` listed in `compose.yaml`) with a `profiles:` entry, Traefik labels (`sso@docker` for admin UIs) and optionally `homelab.metrics.port` |
+| Enable something on a host | Add its profile to that host's `COMPOSE_PROFILES` |
+| Change host config | Edit `/opt/homelab/.env` (or re-run bootstrap with `--env`); applied on the next tick |
+| Roll back | `git revert` and push |
+| Deploy now | `sudo /opt/homelab/scripts/sync.sh --force` |
+| Validate locally | `scripts/validate.sh` (needs Docker) |
+| Smoke-test the whole stack | `test/smoke.sh` on any Docker host with ports 80/443/1053 free (`--down` to remove) |
+
+A secret needed only by one profile can't use `${VAR:?}` in compose, because
+compose interpolates services whose profiles are off. Add it to
+`required_by_profile` in `scripts/apply.sh` instead.
+
+Protect `main` and require the `validate` workflow, since a merge goes
+straight to the hosts.
+
+## Security notes
+
+- **Rootful Docker, by choice.** Rootless Docker would break core pieces here.
+  Pi-hole would lose real client IPs (all queries appear to come from one
+  address) and needs port 53. Alloy needs real host /proc, cgroup and journal
+  access. smartctl needs raw devices. `live-restore` isn't supported. The
+  mitigations: no container except the proxy mounts the Docker socket; Traefik,
+  Alloy and tinyauth get a read-only, GET-only API through `docker-proxy` on an
+  internal network; most services run with `no-new-privileges`; and nothing
+  listens on the internet.
+- Only Alloy, Tailscale and smartctl-exporter run privileged or with host
+  networking, because each needs host access.
+
+## Layout
+
+```
+compose.yaml              project root: includes every stack, defines networks
+.env.example              all host config, documented
+stacks/traefik/           reverse proxy + ACME + read-only Docker API proxy
+stacks/auth/              Pocket ID + tinyauth (SSO)
+stacks/pihole/            profile: dns
+stacks/observability/     profile: observability (prometheus, loki, grafana, alloy, ntfy)
+stacks/tailscale/         profile: tailscale
+stacks/backup/            profile: backup
+stacks/unifi/             profile: unifi
+stacks/smart/             profile: smart (locally built image)
+scripts/bootstrap.sh      idempotent host provisioning
+scripts/sync.sh           git poll → apply (systemd timer)
+scripts/apply.sh          docker compose converge
+scripts/restore.sh        restore volumes from restic
+scripts/gen-secrets.sh    generate per-site secrets
+scripts/validate.sh       lint/verify (CI + local)
+test/smoke.sh             end-to-end test on Docker Desktop (local.env, compose.local.yaml)
+systemd/                  sync service + timer
+```
