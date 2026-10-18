@@ -54,36 +54,101 @@ independent:** no service talks to another site.
   Raspberry Pi and Docker repos daily, and reboots in a set window when a
   kernel or firmware update needs it.
 
+## External setup
+
+Everything outside the Pis, in the order you need it. Per-site items are done
+once for each site, which keeps the sites independent.
+
+**Once**
+
+1. **GitHub.** This repo. Once CI has run:
+   - Protect `main` and require the `validate` check, since a merge deploys
+     within a minute.
+   - Install the [Renovate](https://github.com/apps/renovate) app on the repo
+     for image-update PRs.
+2. **Cloudflare DNS.** A domain in a Cloudflare zone, with a subdomain per site
+   (e.g. `home.example.com`, `cabin.example.com`). No DNS records are needed;
+   Traefik only creates temporary TXT records for the DNS-01 challenge.
+   - Prefer a dedicated domain for the homelab. Cloudflare can't scope a token
+     to a subdomain, so each Pi holds a token that can edit the whole zone. A
+     cheap separate domain keeps your main domain's email and website out of
+     reach.
+   - Protect the Cloudflare account with a passkey or hardware key: it holds
+     both certificate issuance and the backups (below).
+3. **Tailscale.** One tailnet; the free plan is plenty. In the access-control
+   policy, add the tag and let it approve each site's LAN route:
+
+   ```jsonc
+   "tagOwners": { "tag:homelab": ["autogroup:admin"] },
+   "autoApprovers": {
+     "routes": {
+       "192.168.1.0/24":  ["tag:homelab"],  // home
+       "192.168.20.0/24": ["tag:homelab"],  // cabin
+     },
+   },
+   ```
+
+   Give every site a **distinct LAN subnet**: two sites advertising the same
+   range collide. UniFi defaults new sites to `192.168.1.0/24`, so change the
+   second site before anything depends on it.
+
+**Per site**
+
+4. **Cloudflare API token** with *Zone → DNS → Edit* on that zone →
+   `CF_DNS_API_TOKEN`.
+5. **Cloudflare R2 bucket** for backups, e.g. `homelab-home`. R2 is
+   S3-compatible, has no egress fees (restores are free), and these backups
+   fit easily in the free tier. Create an R2 API token with *Object Read &
+   Write* scoped to that bucket only, so a compromised Pi can't touch another
+   site's backups. Then:
+   - `RESTIC_REPOSITORY=s3:https://<account-id>.r2.cloudflarestorage.com/homelab-home`
+   - `RESTIC_S3_ACCESS_KEY_ID` / `RESTIC_S3_SECRET_ACCESS_KEY` from the token
+6. **Tailscale OAuth client** (*Settings → OAuth clients*, scope *Auth Keys:
+   write*, tag `tag:homelab`). Use the secret as
+   `TS_AUTHKEY=tskey-client-…?ephemeral=false&preauthorized=true`. Without
+   `ephemeral=false`, OAuth-issued nodes are ephemeral and vanish from the
+   tailnet whenever the Pi goes offline. Then add a split-DNS nameserver
+   (*DNS → Add nameserver → Custom*): `BASE_DOMAIN` → the site's `HOST_IP`.
+7. **UniFi**, on the site's console:
+   - a DHCP reservation for the Pi (`HOST_IP`)
+   - DHCP DNS: the Pi first, plus a second resolver so the network survives a
+     Pi reboot
+   - for the `unifi` profile, a local API key (*Settings → Control Plane →
+     Integrations*) → `UNIFI_API_KEY`
+8. **Password manager.** Store the site's whole `.env`, above all
+   `RESTIC_PASSWORD` and `POCKET_ID_ENCRYPTION_KEY`. It's the one part of the
+   system that isn't in git, and a restore is impossible or useless without
+   it.
+
+**After the host is up**
+
+9. **ntfy app** on each phone (see [Alerts on your phone](#alerts-on-your-phone)).
+   No account needed.
+10. Optional: an **external dead-man's switch** such as healthchecks.io. Alerts
+    run on the Pi they describe, so only an outside check can notice a site
+    that's fully down or offline. Not wired in yet.
+
+Let's Encrypt needs no setup; Traefik registers automatically.
+
 ## Setting up a host
-
-**Prerequisites (once):**
-
-1. A domain on Cloudflare, with a subdomain per site (e.g. `home.example.com`,
-   `cabin.example.com`). No DNS records are needed; Traefik only creates
-   temporary TXT records. Create an API token with *Zone → DNS → Edit*.
-2. A static IP or DHCP reservation for each Pi. Use distinct LAN subnets per
-   site if both will advertise Tailscale routes.
-
-**Per host:**
 
 1. Flash 64-bit Raspberry Pi OS Lite. On the Pi 5, boot from the NVMe.
 2. Write the host's `.env` from [`.env.example`](.env.example). Use
-   `scripts/gen-secrets.sh` for the generated values and store
-   `POCKET_ID_ENCRYPTION_KEY` and `RESTIC_PASSWORD` in your password manager.
-   Leave the OIDC client fields empty for now.
+   `scripts/gen-secrets.sh` for the generated values. Leave the OIDC client
+   fields empty for now. Keep the file outside the repo, e.g.
+   `~/.config/homelab/home.env`, and in your password manager.
 3. Copy the script and env over, then run it:
 
    ```sh
-   scp scripts/bootstrap.sh primary.env pi@<host>:
-   ssh pi@<host> sudo ./bootstrap.sh --repo git@github.com:<you>/homelab.git --env primary.env
+   scp scripts/bootstrap.sh home.env <host>:
+   ssh -t <host> sudo ./bootstrap.sh --repo https://github.com/marcusdarmstrong/homelab.git --env home.env
    ```
 
-   On the first run against a private repo the script prints a deploy key and
-   stops. Add the key under *Settings → Deploy keys* (read-only), then re-run.
-   Reboot if asked (memory cgroup).
+   Reboot if asked (memory cgroup). For a private repo, use an SSH URL
+   instead: the first run prints a deploy key and stops; add it under
+   *Settings → Deploy keys* (read-only), then re-run.
 4. Watch the first deploy: `journalctl -fu homelab-sync`.
-5. Set up SSO (below), then point the site's UniFi DHCP DNS at the Pi. Add a
-   second resolver too, so the network survives a Pi reboot.
+5. Set up SSO (below) right away.
 
 `bootstrap.sh` is idempotent, and re-running it is how changes to it get
 applied. It:
@@ -150,15 +215,17 @@ Logs: `journalctl -u apt-daily-upgrade`.
 
 ### Tailscale
 
-Create an OAuth client (or auth key) tagged `tag:homelab` for `TS_AUTHKEY`, set
-`TS_ROUTES` to the site's LAN, and approve the route in the admin console.
-For remote name resolution, add a split-DNS nameserver: `BASE_DOMAIN` →
-the site's `HOST_IP`.
+Accounts and keys are covered in [External setup](#external-setup). On the
+host: set `TS_AUTHKEY`, set `TS_ROUTES` to the site's LAN, and enable the
+`tailscale` profile. The key is only used for the first login; the node then
+stays logged in through its state volume.
 
 ### Backups and restore
 
-Nightly at 03:30 by default. Everything in the Docker volumes is backed up
-except Prometheus/Loki data and Pi-hole's query history. To rebuild a dead
+Nightly at 03:30 by default, to the site's R2 bucket (see [External
+setup](#external-setup)); any restic repository works. Everything in the
+Docker volumes is backed up except Prometheus/Loki data, Pi-hole's query
+history and caches. To rebuild a dead
 host: bootstrap it with the same `.env`, let the first deploy finish, then
 `sudo /opt/homelab/scripts/restore.sh`. Pass volume names (e.g.
 `pocket-id-data`) to restore only those.
@@ -169,8 +236,9 @@ check what you restored. Running `restic check` occasionally is worthwhile.
 ### Migrating the existing Pi 4 Pi-hole
 
 1. In the old Pi-hole: *Settings → Teleporter → Export*.
-2. Stop the native install so port 53 is free: `sudo systemctl disable --now pihole-FTL`
-   (or stop its container).
+2. Free port 53: `sudo systemctl disable --now pihole-FTL` for a native
+   install, or `docker compose down` in its directory for a container.
+   Clients using that Pi for DNS lose resolution until the new Pi-hole is up.
 3. Bootstrap the host as above, then import the Teleporter archive at
    `https://pihole.BASE_DOMAIN`. Settings managed through `FTLCONF_*` take
    precedence and show as read-only in the UI.
@@ -192,8 +260,6 @@ A secret needed only by one profile can't use `${VAR:?}` in compose, because
 compose interpolates services whose profiles are off. Add it to
 `required_by_profile` in `scripts/apply.sh` instead.
 
-Protect `main` and require the `validate` workflow, since a merge goes
-straight to the hosts.
 
 ## Security notes
 
