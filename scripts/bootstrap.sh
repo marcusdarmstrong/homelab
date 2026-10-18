@@ -43,7 +43,7 @@ esac
 # shellcheck source=/dev/null
 source /etc/os-release
 
-reboot_required=0
+reboot_reasons=()
 
 # write_file PATH CONTENT [MODE]: write only if different. Returns 0 if changed.
 write_file() {
@@ -89,15 +89,7 @@ if write_file /etc/apt/sources.list.d/docker.list \
 fi
 apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-# Rotate container logs (they're shipped to Loki anyway) to spare SD cards, and
-# keep containers running, Pi-hole especially, across dockerd restarts.
-if write_file /etc/docker/daemon.json '{
-  "log-driver": "local",
-  "log-opts": { "max-size": "10m", "max-file": "3" },
-  "live-restore": true
-}'; then
-  systemctl restart docker
-fi
+# daemon.json depends on .env, so it's written further down.
 systemctl enable --now docker >/dev/null 2>&1
 if [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != root ]] && ! id -nG "$SUDO_USER" | grep -qw docker; then
   usermod -aG docker "$SUDO_USER"
@@ -112,7 +104,22 @@ if ! grep -qw memory /sys/fs/cgroup/cgroup.controllers 2>/dev/null; then
     sed -i '1 s/$/ cgroup_enable=memory cgroup_memory=1/' "$cmdline"
     log "enabled memory cgroup in $cmdline"
   fi
-  reboot_required=1
+  reboot_reasons+=("memory cgroup")
+fi
+
+# ---- swap: zram only -------------------------------------------------------------
+# Raspberry Pi OS defaults to zram plus a 2 GB file on disk that idle pages
+# get written back to daily. Plain zram keeps swap in RAM: no card writes.
+if [[ -d /etc/rpi ]]; then
+  if write_file /etc/rpi/swap.conf.d/homelab.conf '[Main]
+Mechanism=zram'; then
+    reboot_reasons+=("zram-only swap")
+  fi
+  # After that reboot the writeback file is detached and can go.
+  if [[ -f /var/swap ]] && ! losetup -j /var/swap | grep -q . && ! grep -q '^/var/swap' /proc/swaps; then
+    rm -f /var/swap
+    log "removed the unused /var/swap writeback file"
+  fi
 fi
 
 # Subnet routing for the tailscale profile. (IPv4 only: enabling IPv6
@@ -265,6 +272,29 @@ RandomizedDelaySec=0"; then
 fi
 systemctl enable --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1
 
+# ---- docker daemon -------------------------------------------------------------
+# live-restore keeps containers (Pi-hole especially) running across dockerd
+# restarts. Container logs reach Loki either way; DOCKER_LOG_DRIVER picks
+# where Docker keeps its own copy: "local" (rotated files on disk) or
+# "journald" (the journal, which Raspberry Pi OS keeps in RAM).
+log_driver="$(env_val DOCKER_LOG_DRIVER)"
+case "${log_driver:=local}" in
+  local) log_opts=$',\n  "log-opts": { "max-size": "10m", "max-file": "3" }' ;;
+  journald) log_opts="" ;;
+  *) die "DOCKER_LOG_DRIVER must be local or journald, not '$log_driver'" ;;
+esac
+recreate=0
+if write_file /etc/docker/daemon.json "{
+  \"log-driver\": \"$log_driver\"$log_opts,
+  \"live-restore\": true
+}"; then
+  systemctl restart docker
+  # A container's log driver is fixed when it's created.
+  if docker ps -aq --filter label=com.docker.compose.project=homelab | grep -q .; then
+    recreate=1
+  fi
+fi
+
 # ---- deploy timer ------------------------------------------------------------------
 units_changed=0
 for unit in homelab-sync.service homelab-sync.timer; do
@@ -281,11 +311,18 @@ fi
 # credentials, so hold off until .env has been filled in.
 if ((env_ready)); then
   systemctl enable --now homelab-sync.timer >/dev/null 2>&1
+  if ((recreate)); then
+    log "recreating containers for the new log driver"
+    HOMELAB_FORCE_RECREATE=1 "$REPO_DIR/scripts/apply.sh"
+  fi
   systemctl start --no-block homelab-sync.service
   log "deploy timer enabled; follow with: journalctl -fu homelab-sync"
 else
   log "fill in the placeholders in $REPO_DIR/.env (or pass --env), then re-run to enable deploys"
 fi
 
-((reboot_required)) && log "reboot required to enable the memory cgroup"
+if ((${#reboot_reasons[@]})); then
+  printf -v reasons '%s, ' "${reboot_reasons[@]}"
+  log "reboot required: ${reasons%, }"
+fi
 log "done"

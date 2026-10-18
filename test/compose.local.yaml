@@ -31,7 +31,6 @@ services:
   alloy:
     volumes: !override
       - ./stacks/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - alloy-data:/var/lib/alloy/data
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /sys:/sys:ro

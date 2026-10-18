@@ -48,6 +48,7 @@ services:
       - -config.expand-env=true
     environment:
       LOKI_RETENTION: ${LOKI_RETENTION:-30d}
+      LOKI_WAL_ENABLED: ${LOKI_WAL_ENABLED:-true}
     volumes:
       - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
       - loki-data:/loki
@@ -68,6 +69,8 @@ services:
       GF_SERVER_ROOT_URL: https://grafana.${BASE_DOMAIN}
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      # SQLite WAL mode: far fewer page and journal rewrites per write.
+      GF_DATABASE_WAL: "true"
       # Pocket ID is the only way in: no login form, no basic auth, no
       # built-in admin password to manage.
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
@@ -115,7 +118,6 @@ services:
       SITE: ${SITE:?}
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - alloy-data:/var/lib/alloy/data
       - /:/host/root:ro,rslave
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -125,6 +127,11 @@ services:
       - /var/log/journal:/var/log/journal:ro
       - /run/log/journal:/run/log/journal:ro
       - /etc/machine-id:/etc/machine-id:ro
+    # Alloy's data is a write-ahead buffer for metrics on their way to
+    # Prometheus plus log read positions; neither needs to survive a reboot,
+    # and on disk the buffer rewrites every sample.
+    tmpfs:
+      - /var/lib/alloy/data:size=256m
     networks:
       - default
       - docker-api
@@ -172,5 +179,4 @@ volumes:
   prometheus-data:
   loki-data:
   grafana-data:
-  alloy-data:
   ntfy-data:

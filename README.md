@@ -228,6 +228,40 @@ the failure cases. These are host-level settings applied by `bootstrap.sh`, whic
 `scripts/provision.sh` runs on every push.
 Logs: `journalctl -u apt-daily-upgrade`.
 
+### SD-card hosts
+
+SD cards wear out with writes, so the stack keeps them low everywhere and
+offers a preset that trades a little durability for far fewer writes. On an
+idle Pi 4 running `dns,observability`, the defaults wrote about **5.8 GB/day**,
+mostly Grafana's SQLite database, Loki's and Alloy's write-ahead logs, Docker
+API access logs, and the ext4 journal commits all of those cause.
+
+Always on, since they only remove waste:
+
+- zram-only swap (`bootstrap.sh`): Raspberry Pi OS otherwise writes idle
+  swap pages to a 2 GB `/var/swap` file daily
+- Alloy's write-ahead buffer and Pi-hole's log files in RAM (`tmpfs`)
+- Grafana's SQLite in WAL mode, with dashboard rescans hourly instead of
+  every minute (deploys recreate Grafana when dashboards change anyway)
+- histogram buckets and a few noisy metric families dropped before
+  Prometheus stores them, which halves its series
+- the Docker API proxy logs warnings only, instead of every call
+
+The preset, for `hosts/<name>.env` on SD-card hosts:
+
+```sh
+DOCKER_LOG_DRIVER=journald   # container logs kept in RAM; still sent to Loki
+LOKI_WAL_ENABLED=false       # a crash can lose the last few minutes of logs
+PIHOLE_DB_INTERVAL=600       # Pi-hole flushes query stats every 10 minutes
+```
+
+Raspberry Pi OS already mounts `/` with `noatime`, keeps `/tmp` in RAM and
+the journal volatile. The "Disk write rate high" alert fires if a disk
+averages over 2 GB/day for six hours. To see who is writing,
+`rate(node_disk_written_bytes_total[1h])` in Prometheus gives the total, and
+each container's `io.stat` under `/sys/fs/cgroup/system.slice/docker-*.scope/`
+gives the split.
+
 ### Tailscale
 
 Accounts and keys are covered in [External setup](#external-setup). On the

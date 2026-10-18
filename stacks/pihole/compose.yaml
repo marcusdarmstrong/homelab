@@ -29,8 +29,14 @@ services:
       FTLCONF_misc_dnsmasq_lines: ${PIHOLE_DNSMASQ_LINES:-address=/${BASE_DOMAIN}/${HOST_IP}}
       # The host keeps time (systemd-timesyncd); a container can't set the clock.
       FTLCONF_ntp_sync_active: "false"
+      # How often query stats are flushed to the long-term database. Raise it
+      # on SD-card hosts (see .env.example).
+      FTLCONF_database_DBinterval: ${PIHOLE_DB_INTERVAL:-60}
     volumes:
       - pihole-data:/etc/pihole
+    # Query and FTL log files are only for live debugging; keep them off disk.
+    tmpfs:
+      - /var/log/pihole:size=64m,mode=0755
     cap_add:
       - SYS_NICE
     labels:

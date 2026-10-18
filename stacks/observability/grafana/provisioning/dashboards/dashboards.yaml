@@ -10,7 +10,9 @@ providers:
     type: file
     disableDeletion: true
     allowUiUpdates: false
-    updateIntervalSeconds: 60
+    # Deploys recreate Grafana when a dashboard file changes, so polling is
+    # only a fallback; each poll writes to the database.
+    updateIntervalSeconds: 3600
     options:
       path: /var/lib/grafana/dashboards
       foldersFromFilesStructure: false

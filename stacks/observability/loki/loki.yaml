@@ -34,6 +34,12 @@ limits_config:
   allow_structured_metadata: true
   volume_enabled: true
 
+ingester:
+  # The WAL makes recent logs survive a crash at the cost of writing every
+  # push to disk twice. LOKI_WAL_ENABLED=false on SD-card hosts.
+  wal:
+    enabled: ${LOKI_WAL_ENABLED:-true}
+
 compactor:
   working_directory: /loki/compactor
   retention_enabled: true

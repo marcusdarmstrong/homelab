@@ -36,7 +36,7 @@ discovery.relabel "node" {
 
 prometheus.scrape "host" {
 	targets    = discovery.relabel.node.output
-	forward_to = [prometheus.remote_write.local.receiver]
+	forward_to = [prometheus.relabel.trim.receiver]
 }
 
 prometheus.exporter.cadvisor "containers" {
@@ -56,7 +56,7 @@ discovery.relabel "cadvisor" {
 
 prometheus.scrape "containers" {
 	targets    = discovery.relabel.cadvisor.output
-	forward_to = [prometheus.remote_write.local.receiver]
+	forward_to = [prometheus.relabel.trim.receiver]
 }
 
 // Internet reachability from this site.
@@ -100,7 +100,7 @@ discovery.relabel "wan" {
 
 prometheus.scrape "wan" {
 	targets    = discovery.relabel.wan.output
-	forward_to = [prometheus.remote_write.local.receiver]
+	forward_to = [prometheus.relabel.trim.receiver]
 }
 
 prometheus.exporter.self "alloy" { }
@@ -116,7 +116,7 @@ discovery.relabel "alloy" {
 
 prometheus.scrape "alloy" {
 	targets    = discovery.relabel.alloy.output
-	forward_to = [prometheus.remote_write.local.receiver]
+	forward_to = [prometheus.relabel.trim.receiver]
 }
 
 // Any container with a `homelab.metrics.port` label.
@@ -167,7 +167,20 @@ discovery.relabel "labelled" {
 
 prometheus.scrape "labelled" {
 	targets    = discovery.relabel.labelled.output
+	forward_to = [prometheus.relabel.trim.receiver]
+}
+
+// Drop what no dashboard or alert uses before it's stored: histogram
+// buckets (most of the observability stack's self-metrics) and a few noisy
+// families. Roughly halves the series count, and with it Prometheus's writes.
+prometheus.relabel "trim" {
 	forward_to = [prometheus.remote_write.local.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = ".+_bucket|grafana_feature_toggles_info|node_nfsd?_.+|node_softnet_.+"
+		action        = "drop"
+	}
 }
 
 prometheus.remote_write "local" {

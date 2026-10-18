@@ -584,6 +584,54 @@
               }
             }
           ]
+        },
+        {
+          "uid": "disk-writes-high",
+          "title": "Disk write rate high",
+          "condition": "C",
+          "for": "1h",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.host }}: {{ $labels.device }} is averaging {{ $values.A.Value | printf \"%.1f\" }} GB/day of writes (SD cards wear out; see README \u2192 SD-card hosts)"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 21600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "instant": true,
+                "expr": "max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+|nvme[0-9]+n[0-9]+|sd[a-z]+\"}[6h])) * 86400 / 1e9"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        2
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     }
