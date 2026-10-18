@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Provision a Raspberry Pi (64-bit Raspberry Pi OS / Debian) as a homelab host.
+# Provision a Raspberry Pi (64-bit Raspberry Pi OS Lite) as a homelab host.
 #
 # Idempotent: every step inspects current state and only changes what differs,
 # so re-running is always safe and is how you apply changes to this script.
@@ -30,10 +30,9 @@ while (($#)); do
 done
 
 [[ $EUID -eq 0 ]] || die "run as root (sudo $0 ...)"
-case "$(dpkg --print-architecture)" in
-  arm64 | amd64) ;;
-  *) die "unsupported architecture $(dpkg --print-architecture); use a 64-bit OS" ;;
-esac
+[[ "$(dpkg --print-architecture)" == arm64 ]] || die "use 64-bit Raspberry Pi OS (this is $(dpkg --print-architecture))"
+# Raspberry Pi OS manages the network, and so the Pi's own DNS, with it.
+systemctl is-active --quiet NetworkManager || die "NetworkManager isn't running; only Raspberry Pi OS is supported"
 # shellcheck source=/dev/null
 source /etc/os-release
 
@@ -70,15 +69,13 @@ apt_install() {
 apt_install ca-certificates curl git gnupg unattended-upgrades
 
 # ---- docker (from Docker's apt repo, not the distro's) ---------------------
-docker_distro=debian
-[[ "$ID" == ubuntu ]] && docker_distro=ubuntu
 if [[ ! -s /etc/apt/keyrings/docker.asc ]]; then
   install -d -m 0755 /etc/apt/keyrings
-  curl -fsSL "https://download.docker.com/linux/$docker_distro/gpg" -o /etc/apt/keyrings/docker.asc
+  curl -fsSL "https://download.docker.com/linux/debian/gpg" -o /etc/apt/keyrings/docker.asc
   chmod a+r /etc/apt/keyrings/docker.asc
 fi
 if write_file /etc/apt/sources.list.d/docker.list \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/$docker_distro $VERSION_CODENAME stable"; then
+  "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $VERSION_CODENAME stable"; then
   apt_updated=0
 fi
 apt_install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -151,6 +148,7 @@ elif [[ ! -f "$REPO_DIR/.env" ]]; then
   install -m 0600 "$REPO_DIR/.env.example" "$REPO_DIR/.env"
   log "created $REPO_DIR/.env from the example"
 fi
+
 # Placeholders from .env.example (changeme, CHANGE-ME) mean it isn't filled in.
 if grep -qiE "^[A-Z0-9_]+=[\"']?change-?me" "$REPO_DIR/.env"; then
   env_ready=0
@@ -184,32 +182,19 @@ if ((env_ready)); then
   read -ra host_dns <<<"$(env_val HOST_DNS)"
   ((${#host_dns[@]})) || host_dns=(1.1.1.1 1.0.0.1)
 
-  if systemctl is-active --quiet systemd-resolved; then
-    # Also frees port 53 for Pi-hole.
-    if write_file /etc/systemd/resolved.conf.d/homelab.conf "[Resolve]
-DNS=${host_dns[*]}
-Domains=~.
-DNSStubListener=no"; then
-      ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
-      systemctl restart systemd-resolved
+  # Every active connection on a physical NIC, or DHCP DNS from the others
+  # would still end up in resolv.conf. (Docker's veths also look like
+  # ethernet, but have no backing device.)
+  want="$(IFS=,; echo "${host_dns[*]}")|yes|yes"
+  while IFS=: read -r con _ dev; do
+    [[ -e "/sys/class/net/$dev/device" ]] || continue
+    have="$(nmcli -g ipv4.dns,ipv4.ignore-auto-dns,ipv6.ignore-auto-dns connection show "$con" | paste -sd'|' -)"
+    if [[ "$have" != "$want" ]]; then
+      nmcli connection modify "$con" ipv4.dns "${host_dns[*]}" ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes
+      nmcli device reapply "$dev"
+      log "set DNS on '$con' to ${host_dns[*]}"
     fi
-  elif systemctl is-active --quiet NetworkManager; then
-    # Every active connection on a physical NIC, or DHCP DNS from the others
-    # would still end up in resolv.conf. (Docker's veths also look like
-    # ethernet, but have no backing device.)
-    want="$(IFS=,; echo "${host_dns[*]}")|yes|yes"
-    while IFS=: read -r con _ dev; do
-      [[ -e "/sys/class/net/$dev/device" ]] || continue
-      have="$(nmcli -g ipv4.dns,ipv4.ignore-auto-dns,ipv6.ignore-auto-dns connection show "$con" | paste -sd'|' -)"
-      if [[ "$have" != "$want" ]]; then
-        nmcli connection modify "$con" ipv4.dns "${host_dns[*]}" ipv4.ignore-auto-dns yes ipv6.ignore-auto-dns yes
-        nmcli device reapply "$dev"
-        log "set DNS on '$con' to ${host_dns[*]}"
-      fi
-    done < <(nmcli -t -f NAME,TYPE,DEVICE connection show --active)
-  else
-    write_file /etc/resolv.conf "$(printf 'nameserver %s\n' "${host_dns[@]}")" || true
-  fi
+  done < <(nmcli -t -f NAME,TYPE,DEVICE connection show --active)
   getent hosts github.com >/dev/null || log "warning: DNS lookups are failing after the DNS change"
 fi
 
