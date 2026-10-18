@@ -8,18 +8,12 @@
 # (as root; works standalone or from a checkout):
 #   bootstrap.sh --repo https://github.com/<you>/homelab.git [--env ./host.env]
 #                [--branch main] [--dir /opt/homelab]
-#
-# For a private repo the first run generates a deploy key, prints it and
-# stops. Add it to the repo (Settings > Deploy keys, read-only), then re-run.
 set -euo pipefail
 
 REPO_URL=""
 BRANCH=main
 REPO_DIR=/opt/homelab
 ENV_SRC=""
-DEPLOY_KEY=/root/.ssh/homelab_deploy_ed25519
-# github.com's published host key: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
-GITHUB_HOST_KEY="github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
 
 log() { printf '\033[1m[bootstrap]\033[0m %s\n' "$*" >&2; }
 die() { log "error: $*"; exit 1; }
@@ -30,7 +24,7 @@ while (($#)); do
     --branch) BRANCH="$2"; shift 2 ;;
     --dir) REPO_DIR="$2"; shift 2 ;;
     --env) ENV_SRC="$(realpath "$2")"; shift 2 ;;
-    -h | --help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,10p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -140,31 +134,11 @@ else
   [[ -n "$REPO_URL" ]] || die "--repo is required on first run"
 fi
 
-ssh_cmd=ssh
-if [[ "$REPO_URL" == git@* || "$REPO_URL" == ssh://* ]]; then
-  install -d -m 0700 /root/.ssh
-  if [[ ! -f "$DEPLOY_KEY" ]]; then
-    ssh-keygen -q -t ed25519 -N '' -C "homelab-deploy@$(hostname -s)" -f "$DEPLOY_KEY"
-    log "generated deploy key $DEPLOY_KEY"
-  fi
-  touch /root/.ssh/known_hosts
-  grep -qxF "$GITHUB_HOST_KEY" /root/.ssh/known_hosts || echo "$GITHUB_HOST_KEY" >>/root/.ssh/known_hosts
-  ssh_cmd="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes"
-fi
-
+# The repo is public, so an anonymous HTTPS clone needs no credentials.
 if [[ ! -d "$REPO_DIR/.git" ]]; then
-  if ! GIT_SSH_COMMAND="$ssh_cmd" git clone --quiet --branch "$BRANCH" "$REPO_URL" "$REPO_DIR"; then
-    if [[ "$ssh_cmd" != ssh ]]; then
-      log "clone failed. Add this key as a read-only deploy key on the repo, then re-run:"
-      echo
-      cat "$DEPLOY_KEY.pub"
-      echo
-    fi
-    exit 1
-  fi
+  git clone --quiet --branch "$BRANCH" "$REPO_URL" "$REPO_DIR"
   log "cloned $REPO_URL into $REPO_DIR"
 fi
-[[ "$ssh_cmd" == ssh ]] || git -C "$REPO_DIR" config core.sshCommand "$ssh_cmd"
 # Let non-root users read the root-owned checkout (git log, git status).
 git config --system --get-all safe.directory 2>/dev/null | grep -qxF "$REPO_DIR" ||
   git config --system --add safe.directory "$REPO_DIR"
@@ -182,9 +156,14 @@ if grep -qiE "^[A-Z0-9_]+=[\"']?change-?me" "$REPO_DIR/.env"; then
   env_ready=0
 fi
 
-# Last assignment of KEY in .env, outer quotes stripped.
+# Last assignment of KEY in .env, outer quotes stripped. With
+# HOST_STORAGE=sdcard, config/sdcard.env supplies keys .env doesn't set.
 env_val() {
-  sed -n "s/^$1=//p" "$REPO_DIR/.env" | tail -1 | sed -e "s/^'\\(.*\\)'\$/\\1/" -e 's/^"\(.*\)"$/\1/'
+  local files=("$REPO_DIR/.env")
+  if [[ "$1" != HOST_STORAGE && "$(env_val HOST_STORAGE)" == sdcard ]]; then
+    files=("$REPO_DIR/config/sdcard.env" "${files[@]}")
+  fi
+  sed -n "s/^$1=//p" "${files[@]}" | tail -1 | sed -e "s/^'\\(.*\\)'\$/\\1/" -e 's/^"\(.*\)"$/\1/'
 }
 
 # ---- hostname and host DNS (from .env) ----------------------------------------------
@@ -274,9 +253,10 @@ systemctl enable --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1
 
 # ---- docker daemon -------------------------------------------------------------
 # live-restore keeps containers (Pi-hole especially) running across dockerd
-# restarts. Container logs reach Loki either way; DOCKER_LOG_DRIVER picks
-# where Docker keeps its own copy: "local" (rotated files on disk) or
-# "journald" (the journal, which Raspberry Pi OS keeps in RAM).
+# restarts. Container logs reach Loki either way; DOCKER_LOG_DRIVER (set by
+# config/sdcard.env) picks where Docker keeps its own copy: "local" (rotated
+# files on disk) or "journald" (the journal, which Raspberry Pi OS keeps in
+# RAM).
 log_driver="$(env_val DOCKER_LOG_DRIVER)"
 case "${log_driver:=local}" in
   local) log_opts=$',\n  "log-opts": { "max-size": "10m", "max-file": "3" }' ;;

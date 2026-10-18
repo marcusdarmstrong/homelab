@@ -13,6 +13,7 @@ source "$REPO_DIR/scripts/lib.sh"
 cd "$REPO_DIR"
 # COMPOSE_ENV_FILES lets test/smoke.sh supply its own env.
 [[ -f .env || -n "${COMPOSE_ENV_FILES:-}" ]] || die "missing $REPO_DIR/.env (copy .env.example and fill it in)"
+use_host_env
 
 # Compose interpolates every service whether or not its profile is active, so
 # profile-specific secrets can't use ${VAR:?}. Check them here instead.

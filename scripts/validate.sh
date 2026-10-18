@@ -13,6 +13,12 @@ obs=stacks/observability
 
 log "compose config (all profiles)"
 COMPOSE_PROFILES='*' docker compose --env-file .env.example config --quiet
+log "compose config (HOST_STORAGE=sdcard)"
+COMPOSE_PROFILES='*' docker compose --env-file config/sdcard.env --env-file .env.example config --quiet
+# Every sdcard setting must be read somewhere, or it silently does nothing.
+sed -n 's/^\([A-Z0-9_]*\)=.*/\1/p' config/sdcard.env | while read -r key; do
+  git grep -q "$key" -- stacks scripts/bootstrap.sh || die "config/sdcard.env: $key isn't used anywhere"
+done
 
 log "prometheus config"
 docker run --rm --entrypoint promtool -v "$PWD/$obs/prometheus:/cfg:ro" \

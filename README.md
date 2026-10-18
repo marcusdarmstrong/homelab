@@ -153,9 +153,7 @@ your password manager; they're the one part of the system that isn't in git.
 
 `provision.sh` validates the file first (no placeholders, and the compose
 config must resolve with it), prints which keys changed without printing any
-values, and reports the deploy's outcome. For a private repo, set
-`HOMELAB_REPO` to an SSH URL: bootstrap then prints a deploy key on the first
-run and stops; add it under *Settings → Deploy keys* (read-only) and re-run.
+values, and reports the deploy's outcome.
 
 `bootstrap.sh` is idempotent, and re-running it is how changes to it get
 applied. It:
@@ -230,8 +228,10 @@ Logs: `journalctl -u apt-daily-upgrade`.
 
 ### SD-card hosts
 
-SD cards wear out with writes, so the stack keeps them low everywhere and
-offers a preset that trades a little durability for far fewer writes. On an
+SD cards wear out with writes, so the stack keeps them low everywhere, and a
+host whose `.env` declares `HOST_STORAGE=sdcard` also gets
+[`config/sdcard.env`](config/sdcard.env), which trades a little durability
+for far fewer writes. On an
 idle Pi 4 running `dns,observability`, the defaults wrote about **5.8 GB/day**,
 mostly Grafana's SQLite database, Loki's and Alloy's write-ahead logs, Docker
 API access logs, and the ext4 journal commits all of those cause.
@@ -248,13 +248,10 @@ Always on, since they only remove waste:
   Prometheus to a few hundred series per host
 - the Docker API proxy logs warnings only, instead of every call
 
-The preset, for `hosts/<name>.env` on SD-card hosts:
-
-```sh
-DOCKER_LOG_DRIVER=journald   # container logs kept in RAM; still sent to Loki
-LOKI_WAL_ENABLED=false       # a crash can lose the last few minutes of logs
-PIHOLE_DB_INTERVAL=600       # Pi-hole flushes query stats every 10 minutes
-```
+`config/sdcard.env` sends Docker's copy of container logs to the
+RAM-backed journal, turns off Loki's write-ahead log, and makes Pi-hole and
+Grafana save their state every few minutes instead of every minute. Each
+setting is explained in the file; a key set in the host's `.env` overrides it.
 
 Raspberry Pi OS already mounts `/` with `noatime`, keeps `/tmp` in RAM and
 the journal volatile. The "Disk write rate high" alert fires if a disk
@@ -282,25 +279,6 @@ host: bootstrap it with the same `.env`, let the first deploy finish, then
 
 SQLite databases are copied live. That's fine for these low-write apps, but
 check what you restored. Running `restic check` occasionally is worthwhile.
-
-### Migrating the existing Pi 4 Pi-hole
-
-1. In the old Pi-hole: *Settings → Teleporter → Export*.
-2. Free port 53: `sudo systemctl disable --now pihole-FTL` for a native
-   install, or `docker compose down` in its directory for a container.
-   Clients using that Pi for DNS lose resolution until the new Pi-hole is up.
-3. Bootstrap the host as above, then import the Teleporter archive, either
-   at `https://pihole.BASE_DOMAIN` or on the host:
-
-   ```sh
-   docker cp pi-hole_*_teleporter_*.zip homelab-pihole-1:/tmp/import.zip
-   docker exec homelab-pihole-1 pihole-FTL --teleporter /tmp/import.zip
-   docker restart homelab-pihole-1
-   ```
-
-   The restart matters. The import also restores the old settings, including
-   the old web password, and `FTLCONF_*` values from git only take precedence
-   again when Pi-hole starts. After that they show as read-only in the UI.
 
 ## Day to day
 

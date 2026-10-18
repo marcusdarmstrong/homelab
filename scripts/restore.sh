@@ -14,6 +14,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_DIR/scripts/lib.sh"
 cd "$REPO_DIR"
 
+use_host_env
 compose_env="$(docker compose config --environment)"
 env_get() { sed -n "s/^$1=//p" <<<"$compose_env"; }
 
