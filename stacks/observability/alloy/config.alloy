@@ -40,7 +40,10 @@ prometheus.scrape "host" {
 }
 
 prometheus.exporter.cadvisor "containers" {
-	docker_host      = "tcp://docker-proxy:2375"
+	docker_host = "tcp://docker-proxy:2375"
+	// cAdvisor's Docker support also needs containerd, which Docker 29 runs
+	// at the usual path; without it there's only a whole-host series.
+	containerd_host  = "/host/root/run/containerd/containerd.sock"
 	docker_only      = true
 	storage_duration = "5m"
 }
