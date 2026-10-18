@@ -4,8 +4,9 @@
 # Idempotent: every step inspects current state and only changes what differs,
 # so re-running is always safe and is how you apply changes to this script.
 #
-# Usage (as root; works standalone or from a checkout):
-#   bootstrap.sh --repo git@github.com:<you>/homelab.git [--env ./this-host.env]
+# Usually run for you by scripts/provision.sh from your checkout. Directly
+# (as root; works standalone or from a checkout):
+#   bootstrap.sh --repo https://github.com/<you>/homelab.git [--env ./host.env]
 #                [--branch main] [--dir /opt/homelab]
 #
 # For a private repo the first run generates a deploy key, prints it and
@@ -29,7 +30,7 @@ while (($#)); do
     --branch) BRANCH="$2"; shift 2 ;;
     --dir) REPO_DIR="$2"; shift 2 ;;
     --env) ENV_SRC="$(realpath "$2")"; shift 2 ;;
-    -h | --help) sed -n '2,13p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,14p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done
@@ -157,6 +158,9 @@ if [[ ! -d "$REPO_DIR/.git" ]]; then
   log "cloned $REPO_URL into $REPO_DIR"
 fi
 [[ "$ssh_cmd" == ssh ]] || git -C "$REPO_DIR" config core.sshCommand "$ssh_cmd"
+# Let non-root users read the root-owned checkout (git log, git status).
+git config --system --get-all safe.directory 2>/dev/null | grep -qxF "$REPO_DIR" ||
+  git config --system --add safe.directory "$REPO_DIR"
 
 # ---- host config (.env) ------------------------------------------------------------
 env_ready=1

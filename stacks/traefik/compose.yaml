@@ -40,7 +40,10 @@ services:
       - --metrics.prometheus.entrypoint=metrics
 
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?}
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      # Certificates aren't tagged with the CA that issued them, so staging
+      # (ACME_STORAGE=acme-staging.json) keeps its own file and switching to
+      # production starts clean.
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/${ACME_STORAGE:-acme.json}
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
       # Check propagation against public resolvers: Pi-hole answers for

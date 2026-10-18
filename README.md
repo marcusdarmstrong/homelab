@@ -132,23 +132,30 @@ Let's Encrypt needs no setup; Traefik registers automatically.
 
 ## Setting up a host
 
-1. Flash 64-bit Raspberry Pi OS Lite. On the Pi 5, boot from the NVMe.
-2. Write the host's `.env` from [`.env.example`](.env.example). Use
+Each host's config lives in your checkout as `hosts/<name>.env`, which is
+gitignored. That file is the **source of truth** for the host:
+`scripts/provision.sh <name>` pushes it to the host, and anything edited
+directly on the host is overwritten by the next push. Back these files up to
+your password manager; they're the one part of the system that isn't in git.
+
+1. Flash 64-bit Raspberry Pi OS Lite. On the Pi 5, boot from the NVMe. Make
+   sure you can `ssh` to it (by default as `<name>.local`; set `HOST_SSH`
+   otherwise).
+2. Create `hosts/<name>.env` from [`.env.example`](.env.example), using
    `scripts/gen-secrets.sh` for the generated values. Leave the OIDC client
-   fields empty for now. Keep the file outside the repo, e.g.
-   `~/.config/homelab/home.env`, and in your password manager.
-3. Copy the script and env over, then run it:
+   fields empty for now.
+3. Run `scripts/provision.sh <name>`. On a new host it copies
+   `bootstrap.sh` over, which installs Docker, clones this repo over HTTPS
+   and enables the deploy timer; then it runs the first deploy and shows the
+   result. sudo may ask for your password. Reboot if it asks (memory cgroup).
+4. Set up SSO (below) right away, add the client IDs and secrets to
+   `hosts/<name>.env`, and run `scripts/provision.sh <name>` again.
 
-   ```sh
-   scp scripts/bootstrap.sh home.env <host>:
-   ssh -t <host> sudo ./bootstrap.sh --repo https://github.com/marcusdarmstrong/homelab.git --env home.env
-   ```
-
-   Reboot if asked (memory cgroup). For a private repo, use an SSH URL
-   instead: the first run prints a deploy key and stops; add it under
-   *Settings → Deploy keys* (read-only), then re-run.
-4. Watch the first deploy: `journalctl -fu homelab-sync`.
-5. Set up SSO (below) right away.
+`provision.sh` validates the file first (no placeholders, and the compose
+config must resolve with it), prints which keys changed without printing any
+values, and reports the deploy's outcome. For a private repo, set
+`HOMELAB_REPO` to an SSH URL: bootstrap then prints a deploy key on the first
+run and stops; add it under *Settings → Deploy keys* (read-only) and re-run.
 
 `bootstrap.sh` is idempotent, and re-running it is how changes to it get
 applied. It:
@@ -163,8 +170,10 @@ The Pi resolves through fixed upstreams rather than its own Pi-hole, so it can
 still pull images and sync git while Pi-hole restarts. Containers that need
 `*.BASE_DOMAIN` names reach them through Traefik network aliases, not host DNS.
 
-Set the ACME staging CA in `.env` (`ACME_CA_SERVER`) while you get things
-working, then remove it. Let's Encrypt rate-limits failed production attempts.
+While you get things working, set `ACME_CA_SERVER` to Let's Encrypt staging
+and `ACME_STORAGE=acme-staging.json` (both in `.env.example`), then delete both
+lines. Let's Encrypt rate-limits failed production attempts, and the separate
+storage file means the switch to production gets a fresh, trusted cert.
 
 ### Single sign-on (once per site)
 
@@ -184,8 +193,8 @@ users.
    | tinyauth | `https://auth.BASE_DOMAIN/api/oauth/callback/pocketid` | `TINYAUTH_OIDC_CLIENT_*`     |
    | grafana  | `https://grafana.BASE_DOMAIN/login/generic_oauth`     | `GRAFANA_OIDC_CLIENT_*`      |
 
-4. Put the IDs and secrets in `/opt/homelab/.env`. The next sync tick
-   redeploys with them. Members of `admins` get the Grafana Admin role; anyone
+4. Put the IDs and secrets in `hosts/<name>.env` and run
+   `scripts/provision.sh <name>`. Members of `admins` get the Grafana Admin role; anyone
    else who logs in gets Viewer.
 
 ### Alerts on your phone
@@ -209,8 +218,8 @@ without DNS from that Pi. Docker engine upgrades don't stop containers
 (`live-restore`).
 
 "OS auto-update failed" and "Reboot pending" (more than 2 days) alerts cover
-the failure cases. These settings are host config, but they're applied by
-`bootstrap.sh`, not the deploy timer, so re-run bootstrap after changing them.
+the failure cases. These are host-level settings applied by `bootstrap.sh`, which
+`scripts/provision.sh` runs on every push.
 Logs: `journalctl -u apt-daily-upgrade`.
 
 ### Tailscale
@@ -259,9 +268,9 @@ check what you restored. Running `restic check` occasionally is worthwhile.
 | Change a service | Edit `stacks/…`, open a PR, merge |
 | Add a service | Add it to a stack (or a new `stacks/<x>/compose.yaml` listed in `compose.yaml`) with a `profiles:` entry, Traefik labels (`sso@docker` for admin UIs) and optionally `homelab.metrics.port` |
 | Enable something on a host | Add its profile to that host's `COMPOSE_PROFILES` |
-| Change host config | Edit `/opt/homelab/.env` (or re-run bootstrap with `--env`); applied on the next tick |
+| Change host config | Edit `hosts/<name>.env`, then `scripts/provision.sh <name>` |
 | Roll back | `git revert` and push |
-| Deploy now | `sudo /opt/homelab/scripts/sync.sh --force` |
+| Deploy now | `scripts/provision.sh <name>`, or on the host `sudo /opt/homelab/scripts/sync.sh --force` |
 | Validate locally | `scripts/validate.sh` (needs Docker) |
 | Smoke-test the whole stack | `test/smoke.sh` on any Docker host with ports 80/443/1053 free (`--down` to remove) |
 
@@ -288,6 +297,7 @@ compose interpolates services whose profiles are off. Add it to
 ```
 compose.yaml              project root: includes every stack, defines networks
 .env.example              all host config, documented
+hosts/<name>.env          each host's config (gitignored; source of truth)
 stacks/traefik/           reverse proxy + ACME + read-only Docker API proxy
 stacks/auth/              Pocket ID + tinyauth (SSO)
 stacks/pihole/            profile: dns
@@ -296,7 +306,8 @@ stacks/tailscale/         profile: tailscale
 stacks/backup/            profile: backup
 stacks/unifi/             profile: unifi
 stacks/smart/             profile: smart (locally built image)
-scripts/bootstrap.sh      idempotent host provisioning
+scripts/provision.sh      push a host's env and deploy (runs bootstrap)
+scripts/bootstrap.sh      idempotent host provisioning, on the host
 scripts/sync.sh           git poll → apply (systemd timer)
 scripts/apply.sh          docker compose converge
 scripts/restore.sh        restore volumes from restic
