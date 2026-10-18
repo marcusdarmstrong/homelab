@@ -1,6 +1,5 @@
 # Grafana alert rules (file provisioning; JSON is valid YAML). Rules whose metrics
 # don't exist at a site (no backup profile, no SMART disk) stay quiet: noData = OK.
-# `$$` escapes Grafana's env-var expansion in provisioning files.
 {
   "apiVersion": 1,
   "groups": [
@@ -21,7 +20,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: {{ $$labels.mountpoint }} is {{ humanizePercentage $$values.A.Value }} full"
+            "summary": "{{ $labels.host }}: {{ $labels.mountpoint }} is {{ humanizePercentage $values.A.Value }} full"
           },
           "data": [
             {
@@ -69,7 +68,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: memory {{ humanizePercentage $$values.A.Value }} used"
+            "summary": "{{ $labels.host }}: memory {{ humanizePercentage $values.A.Value }} used"
           },
           "data": [
             {
@@ -117,7 +116,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: {{ $$values.A.Value }}\u00b0C"
+            "summary": "{{ $labels.host }}: {{ $values.A.Value }}\u00b0C"
           },
           "data": [
             {
@@ -165,7 +164,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: {{ $$labels.job }} is not responding to scrapes"
+            "summary": "{{ $labels.host }}: {{ $labels.job }} is not responding to scrapes"
           },
           "data": [
             {
@@ -213,7 +212,7 @@
             "severity": "critical"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: homelab-sync is failing; see journalctl -u homelab-sync"
+            "summary": "{{ $labels.host }}: homelab-sync is failing; see journalctl -u homelab-sync"
           },
           "data": [
             {
@@ -261,7 +260,7 @@
             "severity": "critical"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: last successful backup was {{ $$values.A.Value | printf \"%.0f\" }}h ago"
+            "summary": "{{ $labels.host }}: last successful backup was {{ $values.A.Value | printf \"%.0f\" }}h ago"
           },
           "data": [
             {
@@ -309,7 +308,7 @@
             "severity": "critical"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: certificate {{ $$labels.cn }} expires in {{ $$values.A.Value | printf \"%.0f\" }} days; ACME renewal is failing"
+            "summary": "{{ $labels.host }}: certificate {{ $labels.cn }} expires in {{ $values.A.Value | printf \"%.0f\" }} days; ACME renewal is failing"
           },
           "data": [
             {
@@ -357,7 +356,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: no internet probe has succeeded (this alert can only arrive once it's back)"
+            "summary": "{{ $labels.host }}: no internet probe has succeeded (this alert can only arrive once it's back)"
           },
           "data": [
             {
@@ -405,7 +404,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: {{ $$labels.device }} has used {{ $$values.A.Value }}% of its rated endurance"
+            "summary": "{{ $labels.host }}: {{ $labels.device }} has used {{ $values.A.Value }}% of its rated endurance"
           },
           "data": [
             {
@@ -453,7 +452,7 @@
             "severity": "critical"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: {{ $$labels.device }} reports a failing SMART status"
+            "summary": "{{ $labels.host }}: {{ $labels.device }} reports a failing SMART status"
           },
           "data": [
             {
@@ -501,7 +500,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: unattended-upgrades failed; see journalctl -u apt-daily-upgrade"
+            "summary": "{{ $labels.host }}: unattended-upgrades failed; see journalctl -u apt-daily-upgrade"
           },
           "data": [
             {
@@ -549,7 +548,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $$labels.host }}: updates have been waiting on a reboot for 2 days (is OS_AUTO_REBOOT off?)"
+            "summary": "{{ $labels.host }}: updates have been waiting on a reboot for 2 days (is OS_AUTO_REBOOT off?)"
           },
           "data": [
             {

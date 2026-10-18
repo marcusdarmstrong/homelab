@@ -183,9 +183,11 @@ users.
 1. Right after the first deploy, open `https://id.BASE_DOMAIN/setup` and
    register the admin passkey. Do this promptly: until someone does, anyone on
    the LAN could claim the admin account.
-2. Create an `admins` group. Add users for yourself and your partner, and send
-   them their one-time login link to enroll a passkey from their own password
-   manager.
+2. Create an `admins` group and add yourself and your partner. The group page
+   lists every user with a checkbox; only checked users are members. Send your
+   partner their one-time login link to enroll a passkey from their own
+   password manager. Without membership, logins fail with "You are not allowed
+   to access this service."
 3. Create two OIDC clients. Both are **confidential** (not public): tinyauth
    and Grafana run server-side and hold a client secret. Restrict both to the
    `admins` group.

@@ -106,6 +106,9 @@ done
 check "overview dashboard provisioned" test "$(grafana '/api/search?type=dash-db' | json 'len(d)')" -ge 1
 rules_ok() { [[ "$(grafana /api/prometheus/grafana/api/v1/rules | json 'sum(r["health"]=="ok" for g in d["data"]["groups"] for r in g["rules"])')" -ge 12 ]]; }
 check "12 alert rules evaluating" wait_for 120 rules_ok
+# Annotation templates are only rendered at evaluation time, so a broken one
+# shows up in the logs rather than in rule health.
+check "alert templates render" test "$(docker compose logs grafana --since 2m 2>&1 | grep -c 'Error in expanding template')" = 0
 
 section "Alerting (ntfy)"
 receiver="$(grafana /apis/notifications.alerting.grafana.app/v1beta1/namespaces/default/receivers | json '[i["metadata"]["name"] for i in d["items"] if i["spec"]["title"]=="ntfy"][0]')"
