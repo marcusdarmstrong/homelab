@@ -8,6 +8,10 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+    jsonData:
+      # Alloy scrapes at its default 60s; without this Grafana assumes 15s and
+      # $__rate_interval ends up too short for rate() to find two samples.
+      timeInterval: 60s
 
   - name: Loki
     uid: loki
