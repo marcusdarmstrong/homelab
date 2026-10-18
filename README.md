@@ -3,10 +3,10 @@
 Docker Compose config for my Raspberry Pis, deployed GitOps-style: push to
 `main` and every host converges within about a minute.
 
-| Host      | Hardware    | Site  | `COMPOSE_PROFILES` (suggested)                         |
-|-----------|-------------|-------|--------------------------------------------------------|
-| primary   | Pi 4        | home  | `sso,dns,tailscale,backup`                             |
-| secondary | Pi 5 + NVMe | cabin | `sso,dns,observability,tailscale,backup,unifi,smart`   |
+| Host      | Hardware    | Site     | `COMPOSE_PROFILES` (suggested)                       |
+|-----------|-------------|----------|------------------------------------------------------|
+| primary   | Pi 4        | home     | `sso,dns,tailscale,backup`                           |
+| secondary | Pi 5 + NVMe | basecamp | `sso,dns,observability,tailscale,backup,unifi,smart` |
 
 ## How it works
 
@@ -69,7 +69,7 @@ once for each site, which keeps the sites independent.
    - Install the [Renovate](https://github.com/apps/renovate) app on the repo
      for image-update PRs.
 2. **Cloudflare DNS.** A domain in a Cloudflare zone, with a subdomain per site
-   (e.g. `home.example.com`, `cabin.example.com`). No DNS records are needed;
+   (e.g. `home.example.com`, `basecamp.example.com`). No DNS records are needed;
    Traefik only creates temporary TXT records for the DNS-01 challenge.
    - Prefer a dedicated domain for the homelab. Cloudflare can't scope a token
      to a subdomain, so each Pi holds a token that can edit the whole zone. A
@@ -85,7 +85,7 @@ once for each site, which keeps the sites independent.
    "autoApprovers": {
      "routes": {
        "192.168.1.0/24":  ["tag:homelab"],  // home
-       "192.168.20.0/24": ["tag:homelab"],  // cabin
+       "192.168.20.0/24": ["tag:homelab"],  // basecamp
      },
    },
    ```
