@@ -27,8 +27,9 @@ independent:** no service talks to another site.
 
 - **Deploys**: `scripts/sync.sh` runs every minute from a systemd timer. It
   hard-resets to `origin/main` and runs `scripts/apply.sh` whenever the commit
-  or `.env` differs from the last successful apply. Services whose profile was
-  turned off are stopped. A failed apply retries on the next tick and raises
+  or `.env` differs from the last successful apply, after re-running
+  `scripts/bootstrap.sh` if the host-level settings changed. Services whose
+  profile was turned off are stopped. A failed apply retries on the next tick and raises
   the "Deploy failing" alert. Deploys are pull-based, so nothing has to accept
   inbound connections.
 - **Image updates**: images are pinned to exact tags. Renovate opens a PR for
@@ -155,8 +156,10 @@ your password manager; they're the one part of the system that isn't in git.
 config must resolve with it), prints which keys changed without printing any
 values, and reports the deploy's outcome.
 
-`bootstrap.sh` is idempotent, and re-running it is how changes to it get
-applied. It:
+`bootstrap.sh` is idempotent. Every deploy re-runs it when it, `lib.sh`,
+`systemd/`, `config/sdcard.env` or the host's `.env` changed since its last
+successful run, so a commit that changes host settings reaches every host
+like any other. It:
 
 - installs Docker from Docker's apt repo, with log rotation and `live-restore`
 - enables the memory cgroup and IPv4 forwarding
@@ -222,8 +225,8 @@ without DNS from that Pi. Docker engine upgrades don't stop containers
 (`live-restore`).
 
 "OS auto-update failed" and "Reboot pending" (more than 2 days) alerts cover
-the failure cases. These are host-level settings applied by `bootstrap.sh`, which
-`scripts/provision.sh` runs on every push.
+the failure cases. These are host-level settings applied by `bootstrap.sh`,
+which re-runs on the next deploy whenever they change.
 Logs: `journalctl -u apt-daily-upgrade`.
 
 ### SD-card hosts

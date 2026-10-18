@@ -4,7 +4,7 @@
 # Fast-forwards to origin/<branch>, then applies whenever the commit or .env
 # differs from the last successful apply. That means a push, an edited .env,
 # or a previously failed apply all converge on the next tick. Pass --force to
-# apply regardless.
+# apply regardless. Host-level settings (bootstrap.sh) follow the same way.
 #
 # The reset discards local edits to tracked files: git is the source of truth.
 # Untracked/ignored files (.env) are left alone.
@@ -65,6 +65,13 @@ current="$(git rev-parse HEAD)"
 if [[ "$current" != "$target" ]]; then
   log "updating ${current:0:7} -> ${target:0:7}"
   git reset --quiet --hard "$target"
+fi
+
+# Host-level settings deploy the same way: bootstrap.sh re-runs whenever it,
+# its inputs or .env changed since its last successful run.
+if [[ "$(host_config_hash)" != "$(cat "$BOOTSTRAP_STATE" 2>/dev/null || true)" ]]; then
+  log "host settings changed; running bootstrap.sh"
+  "$REPO_DIR/scripts/bootstrap.sh" --from-sync --branch "$HOMELAB_BRANCH"
 fi
 
 desired="$target $(sha256sum .env | cut -d' ' -f1)"

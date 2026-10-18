@@ -2,7 +2,8 @@
 # Provision a Raspberry Pi (64-bit Raspberry Pi OS Lite) as a homelab host.
 #
 # Idempotent: every step inspects current state and only changes what differs,
-# so re-running is always safe and is how you apply changes to this script.
+# so re-running is always safe. scripts/sync.sh re-runs it whenever it, its
+# inputs or .env change, so host-level changes deploy like everything else.
 #
 # Usually run for you by scripts/provision.sh from your checkout. Directly
 # (as root; works standalone or from a checkout):
@@ -14,6 +15,7 @@ REPO_URL=""
 BRANCH=main
 REPO_DIR=/opt/homelab
 ENV_SRC=""
+FROM_SYNC=0
 
 log() { printf '\033[1m[bootstrap]\033[0m %s\n' "$*" >&2; }
 die() { log "error: $*"; exit 1; }
@@ -24,6 +26,8 @@ while (($#)); do
     --branch) BRANCH="$2"; shift 2 ;;
     --dir) REPO_DIR="$2"; shift 2 ;;
     --env) ENV_SRC="$(realpath "$2")"; shift 2 ;;
+    # Internal: sync.sh, which already holds the deploy lock and deploys next.
+    --from-sync) FROM_SYNC=1; shift ;;
     -h | --help) sed -n '2,10p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -33,6 +37,13 @@ done
 [[ "$(dpkg --print-architecture)" == arm64 ]] || die "use 64-bit Raspberry Pi OS (this is $(dpkg --print-architecture))"
 # Raspberry Pi OS manages the network, and so the Pi's own DNS, with it.
 systemctl is-active --quiet NetworkManager || die "NetworkManager isn't running; only Raspberry Pi OS is supported"
+
+# Hold the deploy lock, so a sync tick can't run this script or apply.sh
+# alongside us.
+if ((!FROM_SYNC)); then
+  exec 9>/run/lock/homelab-sync.lock
+  flock -n 9 || { log "waiting for the running deploy to finish"; flock 9; }
+fi
 # shellcheck source=/dev/null
 source /etc/os-release
 
@@ -274,8 +285,13 @@ if ((env_ready)); then
     log "recreating containers for the new log driver"
     HOMELAB_FORCE_RECREATE=1 "$REPO_DIR/scripts/apply.sh"
   fi
-  systemctl start --no-block homelab-sync.service
-  log "deploy timer enabled; follow with: journalctl -fu homelab-sync"
+  # sync.sh compares this to decide when to run us again.
+  host_config_hash >"$BOOTSTRAP_STATE"
+  if ((!FROM_SYNC)); then
+    exec 9>&-
+    systemctl start --no-block homelab-sync.service
+    log "deploy timer enabled; follow with: journalctl -fu homelab-sync"
+  fi
 else
   log "fill in the placeholders in $REPO_DIR/.env (or pass --env), then re-run to enable deploys"
 fi

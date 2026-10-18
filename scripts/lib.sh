@@ -28,6 +28,12 @@ load_host_env() {
 }
 env_get() { sed -n "s/^$1=//p" <<<"$HOST_ENV"; }
 
+# Everything bootstrap.sh's result depends on. sync.sh re-runs it whenever
+# this differs from what its last successful run recorded. Run from the repo.
+host_config_hash() { cat scripts/bootstrap.sh scripts/lib.sh systemd/* config/sdcard.env .env | sha256sum | cut -d' ' -f1; }
+# shellcheck disable=SC2034  # used by bootstrap.sh and sync.sh
+BOOTSTRAP_STATE="${HOMELAB_STATE_DIR:-/var/lib/homelab}/bootstrapped"
+
 # Keys still holding a placeholder from .env.example (changeme,
 # CHANGE-ME, changeme-at-least-16-chars), space-separated.
 placeholder_keys() { grep -iE '^[A-Za-z0-9_]+=change-?me' <<<"$HOST_ENV" | cut -d= -f1 | paste -sd' ' - || true; }
