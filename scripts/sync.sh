@@ -11,6 +11,9 @@
 #
 # Deploy outcome and OS update status are exported as metrics for Alloy's
 # textfile collector, which the "Deploy failing" and OS update alerts watch.
+#
+# A tick where nothing changed writes nothing to disk: on SD-card hosts every
+# small write costs several blocks of filesystem journal.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -27,16 +30,17 @@ force=0
 exec 9>/run/lock/homelab-sync.lock
 flock -n 9 || { log "another sync is running"; exit 0; }
 
-# write_metric FILE CONTENT: atomic, so the collector never reads a partial file.
+# write_metric FILE CONTENT: atomic, so the collector never reads a partial
+# file, and skipped when the content is unchanged.
 write_metric() {
+  [[ -f "$metrics_dir/$1" && "$(<"$metrics_dir/$1")" == "$2" ]] && return
   mkdir -p "$metrics_dir"
   printf '%s\n' "$2" >"$metrics_dir/$1.tmp"
   mv "$metrics_dir/$1.tmp" "$metrics_dir/$1"
 }
 on_exit() {
   local rc=$?
-  write_metric deploy.prom "homelab_deploy_success $((rc == 0))
-homelab_deploy_last_run_timestamp_seconds $(date +%s)"
+  write_metric deploy.prom "homelab_deploy_success $((rc == 0))"
   # OS auto-update status, piggybacking on this every-minute timer.
   local reboot=0 upgrade_failed=0
   [[ -f /var/run/reboot-required ]] && reboot=1
@@ -49,7 +53,13 @@ trap on_exit EXIT
 cd "$REPO_DIR"
 [[ -f .env ]] || die "missing $REPO_DIR/.env"
 
-git fetch --quiet origin "$HOMELAB_BRANCH"
+# ls-remote writes nothing locally, unlike fetch (FETCH_HEAD), so only fetch
+# when the branch has moved.
+remote="$(git ls-remote origin "refs/heads/$HOMELAB_BRANCH" | cut -f1)"
+[[ -n "$remote" ]] || die "no branch $HOMELAB_BRANCH on origin"
+if [[ "$remote" != "$(git rev-parse -q --verify "origin/$HOMELAB_BRANCH" || true)" ]]; then
+  git fetch --quiet origin "$HOMELAB_BRANCH"
+fi
 target="$(git rev-parse "origin/$HOMELAB_BRANCH")"
 current="$(git rev-parse HEAD)"
 if [[ "$current" != "$target" ]]; then
