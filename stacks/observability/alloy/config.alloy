@@ -36,7 +36,7 @@ discovery.relabel "node" {
 
 prometheus.scrape "host" {
 	targets    = discovery.relabel.node.output
-	forward_to = [prometheus.relabel.trim.receiver]
+	forward_to = [prometheus.relabel.keep.receiver]
 }
 
 prometheus.exporter.cadvisor "containers" {
@@ -56,7 +56,7 @@ discovery.relabel "cadvisor" {
 
 prometheus.scrape "containers" {
 	targets    = discovery.relabel.cadvisor.output
-	forward_to = [prometheus.relabel.trim.receiver]
+	forward_to = [prometheus.relabel.keep.receiver]
 }
 
 // Internet reachability from this site.
@@ -100,7 +100,7 @@ discovery.relabel "wan" {
 
 prometheus.scrape "wan" {
 	targets    = discovery.relabel.wan.output
-	forward_to = [prometheus.relabel.trim.receiver]
+	forward_to = [prometheus.relabel.keep.receiver]
 }
 
 prometheus.exporter.self "alloy" { }
@@ -116,7 +116,7 @@ discovery.relabel "alloy" {
 
 prometheus.scrape "alloy" {
 	targets    = discovery.relabel.alloy.output
-	forward_to = [prometheus.relabel.trim.receiver]
+	forward_to = [prometheus.relabel.keep.receiver]
 }
 
 // Any container with a `homelab.metrics.port` label.
@@ -167,18 +167,40 @@ discovery.relabel "labelled" {
 
 prometheus.scrape "labelled" {
 	targets    = discovery.relabel.labelled.output
-	forward_to = [prometheus.relabel.trim.receiver]
+	forward_to = [prometheus.relabel.keep.receiver]
 }
 
-// Drop what no dashboard or alert uses before it's stored: histogram
-// buckets (most of the observability stack's self-metrics) and a few noisy
-// families. Roughly halves the series count, and with it Prometheus's writes.
-prometheus.relabel "trim" {
+// Store only what an alert or dashboard uses, plus enough to see why a host
+// is unwell; everything else is dropped before it reaches Prometheus. The
+// services' own metrics are kept to `up`. To chart something new, add it
+// here first. smartctl and UniFi are kept whole: they're why those profiles
+// exist, and their hosts have NVMe disks.
+prometheus.relabel "keep" {
 	forward_to = [prometheus.remote_write.local.receiver]
 
 	rule {
-		source_labels = ["__name__"]
-		regex         = ".+_bucket|grafana_feature_toggles_info|node_nfsd?_.+|node_softnet_.+"
+		source_labels = ["job", "__name__"]
+		separator     = ";"
+		regex         = string.join([
+			".+;(up|scrape_.+)",
+			"node;(homelab_.+|node_textfile_scrape_error|node_uname_info|node_boot_time_seconds|node_load(1|5|15))",
+			"node;node_(cpu_seconds_total|thermal_zone_temp|pressure_.+|vmstat_pswp(in|out))",
+			"node;node_memory_(MemAvailable|MemTotal|SwapTotal|SwapFree)_bytes",
+			"node;node_(filesystem_(avail|size)_bytes|disk_(read|written)_bytes_total|disk_io_time_seconds_total)",
+			"node;node_network_(receive|transmit)_bytes_total",
+			"cadvisor;container_(cpu_usage_seconds_total|memory_working_set_bytes)",
+			"wan;probe_(success|duration_seconds)",
+			"traefik;traefik_(tls_certs_not_after|service_requests_total|service_request_duration_seconds_(sum|count))",
+			"(smartctl-exporter|unpoller);.+",
+		], "|")
+		action = "keep"
+	}
+
+	// Physical and VPN interfaces only, not Docker's bridges and veths.
+	rule {
+		source_labels = ["__name__", "device"]
+		separator     = ";"
+		regex         = "node_network_.+;(lo|docker0|br-.+|veth.+)"
 		action        = "drop"
 	}
 }

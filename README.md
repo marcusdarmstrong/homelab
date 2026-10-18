@@ -243,8 +243,9 @@ Always on, since they only remove waste:
 - Alloy's write-ahead buffer and Pi-hole's log files in RAM (`tmpfs`)
 - Grafana's SQLite in WAL mode, with dashboard rescans hourly instead of
   every minute (deploys recreate Grafana when dashboards change anyway)
-- histogram buckets and a few noisy metric families dropped before
-  Prometheus stores them, which halves its series
+- Alloy forwards only the metrics an alert or dashboard uses (an allowlist
+  in `config.alloy`; add to it before charting something new), which cuts
+  Prometheus to a few hundred series per host
 - the Docker API proxy logs warnings only, instead of every call
 
 The preset, for `hosts/<name>.env` on SD-card hosts:
