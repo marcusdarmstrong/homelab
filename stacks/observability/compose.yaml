@@ -71,6 +71,11 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       # SQLite WAL mode: far fewer page and journal rewrites per write.
       GF_DATABASE_WAL: "true"
+      # Alert state is saved in batches on this interval rather than after
+      # every evaluation (each rewrites a row per rule). A restart forgets
+      # what changed since the last save; rules just re-evaluate.
+      GF_FEATURE_TOGGLES_ENABLE: alertingSaveStatePeriodic
+      GF_UNIFIED_ALERTING_STATE_PERIODIC_SAVE_INTERVAL: ${GRAFANA_ALERT_STATE_SAVE_INTERVAL:-1m}
       # Pocket ID is the only way in: no login form, no basic auth, no
       # built-in admin password to manage.
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
