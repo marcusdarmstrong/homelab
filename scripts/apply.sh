@@ -13,7 +13,9 @@ source "$REPO_DIR/scripts/lib.sh"
 cd "$REPO_DIR"
 # COMPOSE_ENV_FILES lets test/smoke.sh supply its own env.
 [[ -f .env || -n "${COMPOSE_ENV_FILES:-}" ]] || die "missing $REPO_DIR/.env (copy .env.example and fill it in)"
-use_host_env
+load_host_env
+placeholders="$(placeholder_keys)"
+[[ -z "$placeholders" ]] || die "placeholder values in .env: $placeholders"
 
 # Compose interpolates every service whether or not its profile is active, so
 # profile-specific secrets can't use ${VAR:?}. Check them here instead.
@@ -29,16 +31,11 @@ declare -A oidc_by_profile=(
   [observability]="GRAFANA_OIDC_CLIENT_ID GRAFANA_OIDC_CLIENT_SECRET"
 )
 
-# Read values the way compose parses .env (not by sourcing it as shell).
-compose_env="$(docker compose config --environment)"
-env_get() { sed -n "s/^$1=//p" <<<"$compose_env"; }
-
 profiles="$(env_get COMPOSE_PROFILES)"
 IFS=',' read -ra active <<<"$profiles"
 for profile in always "${active[@]}"; do
   for var in ${required_by_profile[$profile]:-}; do
-    value="$(env_get "$var")"
-    [[ -n "$value" && "$value" != changeme ]] || die "profile '$profile' requires $var in .env"
+    [[ -n "$(env_get "$var")" ]] || die "profile '$profile' requires $var in .env"
   done
   for var in ${oidc_by_profile[$profile]:-}; do
     [[ -n "$(env_get "$var")" ]] || log "warning: $var is unset; SSO for that app won't work until it is (see README)"

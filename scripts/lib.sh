@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # Shared helpers for the homelab scripts. Sourced, not executed.
 
-log() { printf '[homelab] %s\n' "$*" >&2; }
-die() { log "error: $*"; exit 1; }
+# bootstrap.sh defines its own before the checkout (and so this file) exists.
+declare -F log >/dev/null || log() { printf '[homelab] %s\n' "$*" >&2; }
+declare -F die >/dev/null || die() { log "error: $*"; exit 1; }
 
 HOMELAB_BRANCH="${HOMELAB_BRANCH:-main}"
 
@@ -18,3 +19,15 @@ use_host_env() {
     *) die "HOST_STORAGE must be ssd or sdcard, not '$storage'" ;;
   esac
 }
+
+# use_host_env, then keep the environment as compose resolves it (not by
+# sourcing .env as shell) in HOST_ENV for env_get and placeholder_keys.
+load_host_env() {
+  use_host_env
+  HOST_ENV="$(docker compose config --environment)"
+}
+env_get() { sed -n "s/^$1=//p" <<<"$HOST_ENV"; }
+
+# Keys still holding a placeholder from .env.example (changeme,
+# CHANGE-ME, changeme-at-least-16-chars), space-separated.
+placeholder_keys() { grep -iE '^[A-Za-z0-9_]+=change-?me' <<<"$HOST_ENV" | cut -d= -f1 | paste -sd' ' - || true; }

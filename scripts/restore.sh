@@ -14,9 +14,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_DIR/scripts/lib.sh"
 cd "$REPO_DIR"
 
-use_host_env
-compose_env="$(docker compose config --environment)"
-env_get() { sed -n "s/^$1=//p" <<<"$compose_env"; }
+load_host_env
 
 export RESTIC_REPOSITORY RESTIC_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 RESTIC_REPOSITORY="$(env_get RESTIC_REPOSITORY)"

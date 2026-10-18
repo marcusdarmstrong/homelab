@@ -149,24 +149,18 @@ elif [[ ! -f "$REPO_DIR/.env" ]]; then
   log "created $REPO_DIR/.env from the example"
 fi
 
-# Placeholders from .env.example (changeme, CHANGE-ME) mean it isn't filled in.
-if grep -qiE "^[A-Z0-9_]+=[\"']?change-?me" "$REPO_DIR/.env"; then
-  env_ready=0
-fi
-
-# Last assignment of KEY in .env, outer quotes stripped. With
-# HOST_STORAGE=sdcard, config/sdcard.env supplies keys .env doesn't set.
-env_val() {
-  local files=("$REPO_DIR/.env")
-  if [[ "$1" != HOST_STORAGE && "$(env_val HOST_STORAGE)" == sdcard ]]; then
-    files=("$REPO_DIR/config/sdcard.env" "${files[@]}")
-  fi
-  sed -n "s/^$1=//p" "${files[@]}" | tail -1 | sed -e "s/^'\\(.*\\)'\$/\\1/" -e 's/^"\(.*\)"$/\1/'
-}
+cd "$REPO_DIR"
+# shellcheck source=scripts/lib.sh
+source scripts/lib.sh
+load_host_env || die "$REPO_DIR/.env doesn't produce a valid compose config"
+# apply.sh, run below, picks the env files itself.
+unset COMPOSE_ENV_FILES
+# Placeholders from .env.example mean it isn't filled in.
+[[ -z "$(placeholder_keys)" ]] || env_ready=0
 
 # ---- hostname and host DNS (from .env) ----------------------------------------------
 if ((env_ready)); then
-  host_name="$(env_val HOST_NAME)"
+  host_name="$(env_get HOST_NAME)"
   if [[ -n "$host_name" && "$(hostnamectl --static)" != "$host_name" ]]; then
     hostnamectl set-hostname "$host_name"
     if grep -q '^127\.0\.1\.1' /etc/hosts; then
@@ -179,7 +173,7 @@ if ((env_ready)); then
 
   # The Pi resolves via fixed upstreams, never its own Pi-hole, so it can
   # always pull images and sync git, even while Pi-hole is down.
-  read -ra host_dns <<<"$(env_val HOST_DNS)"
+  read -ra host_dns <<<"$(env_get HOST_DNS)"
   ((${#host_dns[@]})) || host_dns=(1.1.1.1 1.0.0.1)
 
   # Every active connection on a physical NIC, or DHCP DNS from the others
@@ -204,9 +198,9 @@ fi
 # backup, and reboots at OS_REBOOT_TIME only when an update needs it.
 # Docker engine upgrades don't stop containers (live-restore); a reboot
 # means a minute or two without DNS from this Pi.
-upgrade_time="$(env_val OS_UPGRADE_TIME)"
-reboot_time="$(env_val OS_REBOOT_TIME)"
-auto_reboot="$(env_val OS_AUTO_REBOOT)"
+upgrade_time="$(env_get OS_UPGRADE_TIME)"
+reboot_time="$(env_get OS_REBOOT_TIME)"
+auto_reboot="$(env_get OS_AUTO_REBOOT)"
 
 write_file /etc/apt/apt.conf.d/20auto-upgrades 'APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
@@ -242,7 +236,7 @@ systemctl enable --now apt-daily.timer apt-daily-upgrade.timer >/dev/null 2>&1
 # config/sdcard.env) picks where Docker keeps its own copy: "local" (rotated
 # files on disk) or "journald" (the journal, which Raspberry Pi OS keeps in
 # RAM).
-log_driver="$(env_val DOCKER_LOG_DRIVER)"
+log_driver="$(env_get DOCKER_LOG_DRIVER)"
 case "${log_driver:=local}" in
   local) log_opts=$',\n  "log-opts": { "max-size": "10m", "max-file": "3" }' ;;
   journald) log_opts="" ;;

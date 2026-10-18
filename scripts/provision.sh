@@ -26,13 +26,13 @@ env_file="hosts/$name.env"
 [[ -f "$env_file" ]] || die "no $env_file (start from .env.example and scripts/gen-secrets.sh)"
 
 # ---- validate locally ---------------------------------------------------------------
-if grep -qiE "^[A-Z0-9_]+=[\"']?change-?me" "$env_file"; then
-  die "$env_file still has placeholder values: $(grep -iE "^[A-Z0-9_]+=[\"']?change-?me" "$env_file" | cut -d= -f1 | tr '\n' ' ')"
-fi
 # Only the host's file, regardless of anything set in this shell.
-local_compose() { env -u COMPOSE_FILE -u COMPOSE_ENV_FILES -u COMPOSE_PROFILES docker compose --env-file "$env_file" "$@"; }
-local_compose config --quiet || die "$env_file doesn't produce a valid compose config"
-env_get() { local_compose config --environment | sed -n "s/^$1=//p"; }
+unset COMPOSE_FILE COMPOSE_PROFILES
+export COMPOSE_ENV_FILES="$env_file"
+docker compose config --quiet || die "$env_file doesn't produce a valid compose config"
+load_host_env
+placeholders="$(placeholder_keys)"
+[[ -z "$placeholders" ]] || die "$env_file still has placeholder values: $placeholders"
 
 target="$(env_get HOST_SSH)"
 target="${target:-$name.local}"
