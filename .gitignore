@@ -1,3 +1,7 @@
+# Host config holds secrets; only the documented examples are tracked.
 .env
+*.env
+!.env.example
+!test/local.env
 .DS_Store
 test/.local-oidc.env

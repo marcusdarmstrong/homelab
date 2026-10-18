@@ -239,9 +239,18 @@ check what you restored. Running `restic check` occasionally is worthwhile.
 2. Free port 53: `sudo systemctl disable --now pihole-FTL` for a native
    install, or `docker compose down` in its directory for a container.
    Clients using that Pi for DNS lose resolution until the new Pi-hole is up.
-3. Bootstrap the host as above, then import the Teleporter archive at
-   `https://pihole.BASE_DOMAIN`. Settings managed through `FTLCONF_*` take
-   precedence and show as read-only in the UI.
+3. Bootstrap the host as above, then import the Teleporter archive, either
+   at `https://pihole.BASE_DOMAIN` or on the host:
+
+   ```sh
+   docker cp pi-hole_*_teleporter_*.zip homelab-pihole-1:/tmp/import.zip
+   docker exec homelab-pihole-1 pihole-FTL --teleporter /tmp/import.zip
+   docker restart homelab-pihole-1
+   ```
+
+   The restart matters. The import also restores the old settings, including
+   the old web password, and `FTLCONF_*` values from git only take precedence
+   again when Pi-hole starts. After that they show as read-only in the UI.
 
 ## Day to day
 
