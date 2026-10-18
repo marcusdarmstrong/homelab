@@ -87,12 +87,15 @@ services:
       GF_AUTH_GENERIC_OAUTH_CLIENT_ID: ${GRAFANA_OIDC_CLIENT_ID:-}
       GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: ${GRAFANA_OIDC_CLIENT_SECRET:-}
       GF_AUTH_GENERIC_OAUTH_SCOPES: openid email profile groups
-      GF_AUTH_GENERIC_OAUTH_AUTH_URL: https://id.${BASE_DOMAIN}/authorize
-      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: https://id.${BASE_DOMAIN}/api/oidc/token
-      GF_AUTH_GENERIC_OAUTH_API_URL: https://id.${BASE_DOMAIN}/api/oidc/userinfo
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/authorize
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/token
+      GF_AUTH_GENERIC_OAUTH_API_URL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/userinfo
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: contains(groups[*], 'admins') && 'Admin' || 'Viewer'
       # Read by provisioning/alerting/contact-points.yaml.
       NTFY_GRAFANA_TOKEN: ${NTFY_GRAFANA_TOKEN:-}
+    # Exchanges codes with Pocket ID server-side (see SSO_IP).
+    extra_hosts:
+      - id.${SSO_DOMAIN:-${BASE_DOMAIN}}:${SSO_IP:-host-gateway}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

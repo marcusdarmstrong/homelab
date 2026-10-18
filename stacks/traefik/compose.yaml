@@ -60,11 +60,10 @@ services:
       - certs:/letsencrypt
     networks:
       default:
-        # Containers that call the SSO endpoints server-side (Grafana,
-        # tinyauth) resolve these names straight to Traefik, independent of
-        # host or LAN DNS.
+        # Containers can reach auth.BASE_DOMAIN without host or LAN DNS.
+        # (Pocket ID's name comes from extra_hosts, since it may be on another
+        # host.)
         aliases:
-          - id.${BASE_DOMAIN}
           - auth.${BASE_DOMAIN}
       docker-api:
     depends_on:

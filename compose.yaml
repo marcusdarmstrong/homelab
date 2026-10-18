@@ -5,8 +5,9 @@
 #
 # Each site is self-contained: nothing here talks to another site.
 #
-# Always on:      traefik, docker-proxy, pocket-id, tinyauth
+# Always on:      traefik, docker-proxy, tinyauth
 # Profiles:
+#   sso            Pocket ID (one host per site)
 #   dns            Pi-hole
 #   observability  Prometheus, Loki, Grafana, Alloy, ntfy (alerts)
 #   tailscale      remote access + LAN subnet route

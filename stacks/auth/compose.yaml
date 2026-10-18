@@ -1,13 +1,14 @@
-# Passwordless single sign-on. Always on.
+# Passwordless single sign-on.
 #
 # Pocket ID (https://id.BASE_DOMAIN) is an OIDC provider that only accepts
 # passkeys, so any WebAuthn authenticator works (1Password, Bitwarden, iCloud
-# Keychain, a YubiKey, ...). Passkeys are bound to this site's domain, so
-# each site keeps its own users.
+# Keychain, a YubiKey, ...). Profile: sso, on one host per site; it can't run
+# as more than one instance. The site's other hosts set SSO_DOMAIN and
+# SSO_IP to use that host's.
 #
-# tinyauth (https://auth.BASE_DOMAIN) turns that into a Traefik forward-auth
-# middleware, `sso@docker`, for apps without their own OIDC support. Apps
-# that speak OIDC natively (Grafana) talk to Pocket ID directly.
+# tinyauth (https://auth.BASE_DOMAIN, always on) turns that into a Traefik
+# forward-auth middleware, `sso@docker`, for apps without their own OIDC
+# support. Apps that speak OIDC natively (Grafana) talk to Pocket ID directly.
 #
 # One-time setup per site: see "Single sign-on" in the README.
 
@@ -15,12 +16,13 @@ services:
   pocket-id:
     image: ghcr.io/pocket-id/pocket-id:v2.17.0
     restart: unless-stopped
+    profiles: [sso]
     security_opt:
       - no-new-privileges:true
     environment:
       APP_URL: https://id.${BASE_DOMAIN}
       TRUST_PROXY: ${DOCKER_SUBNET:-172.30.0.0/24}
-      ENCRYPTION_KEY: ${POCKET_ID_ENCRYPTION_KEY:?}
+      ENCRYPTION_KEY: ${POCKET_ID_ENCRYPTION_KEY:-}
       ANALYTICS_DISABLED: "true"
       # Renovate tracks releases.
       VERSION_CHECK_DISABLED: "true"
@@ -40,7 +42,10 @@ services:
     security_opt:
       - no-new-privileges:true
     depends_on:
-      - pocket-id
+      pocket-id:
+        condition: service_started
+        # Not on hosts that use another host's Pocket ID.
+        required: false
     environment:
       TINYAUTH_APPURL: https://auth.${BASE_DOMAIN}
       TINYAUTH_AUTH_TRUSTEDPROXIES: ${DOCKER_SUBNET:-172.30.0.0/24}
@@ -52,11 +57,14 @@ services:
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_NAME: Pocket ID
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTID: ${TINYAUTH_OIDC_CLIENT_ID:-}
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTSECRET: ${TINYAUTH_OIDC_CLIENT_SECRET:-}
-      TINYAUTH_OAUTH_PROVIDERS_POCKETID_AUTHURL: https://id.${BASE_DOMAIN}/authorize
-      TINYAUTH_OAUTH_PROVIDERS_POCKETID_TOKENURL: https://id.${BASE_DOMAIN}/api/oidc/token
-      TINYAUTH_OAUTH_PROVIDERS_POCKETID_USERINFOURL: https://id.${BASE_DOMAIN}/api/oidc/userinfo
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_AUTHURL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/authorize
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_TOKENURL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/token
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_USERINFOURL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/userinfo
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_REDIRECTURL: https://auth.${BASE_DOMAIN}/api/oauth/callback/pocketid
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_SCOPES: openid email profile groups
+    # Exchanges codes with Pocket ID server-side (see SSO_IP).
+    extra_hosts:
+      - id.${SSO_DOMAIN:-${BASE_DOMAIN}}:${SSO_IP:-host-gateway}
     volumes:
       - tinyauth-data:/data
     networks:

@@ -20,6 +20,7 @@ placeholders="$(placeholder_keys)"
 # Compose interpolates every service whether or not its profile is active, so
 # profile-specific secrets can't use ${VAR:?}. Check them here instead.
 declare -A required_by_profile=(
+  [sso]="POCKET_ID_ENCRYPTION_KEY"
   [observability]="NTFY_GRAFANA_TOKEN NTFY_GRAFANA_PASSWORD_HASH"
   [backup]="RESTIC_REPOSITORY RESTIC_PASSWORD"
   [unifi]="UNIFI_URL UNIFI_API_KEY"

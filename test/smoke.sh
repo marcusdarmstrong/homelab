@@ -86,6 +86,7 @@ check "tinyauth hands off to Pocket ID" grep -q "https://id.$D/authorize" \
   <<<"$(PATH_="/api/oauth/url/pocketid?redirect_uri=https%3A%2F%2Fpihole.$D%2F" https auth -A "$UA")"
 check "Grafana login goes to Pocket ID (PKCE)" grep -q "^302 https://id.$D/authorize.*code_challenge" \
   <<<"$(PATH_=/login/generic_oauth status_and_location grafana)"
+check "Grafana reaches Pocket ID server-side" docker compose exec -T grafana wget -qO- --no-check-certificate "https://id.$D/.well-known/openid-configuration"
 check "HTTP redirects to HTTPS" test "$(curl -s -o /dev/null --resolve grafana.$D:80:127.0.0.1 -w '%{http_code}' http://grafana.$D/)" = 301
 
 section "Metrics and logs"
@@ -132,7 +133,7 @@ check "ad domains blocked" test "$(dns doubleclick.net)" = 0.0.0.0
 section "Profile teardown"
 COMPOSE_PROFILES=dns HOMELAB_SETTLE_SECONDS=5 scripts/apply.sh >/dev/null 2>&1 || true
 check "disabled profiles stopped" test -z "$(docker compose ps -q grafana alloy backup 2>/dev/null)"
-check "always-on and dns services kept" test "$(docker compose ps --status running --format '{{.Service}}' | sort | tr '\n' ' ')" = "docker-proxy pihole pocket-id tinyauth traefik "
+check "always-on and dns services kept" test "$(docker compose ps --status running --format '{{.Service}}' | sort | tr '\n' ' ')" = "docker-proxy pihole tinyauth traefik "
 HOMELAB_SETTLE_SECONDS=15 scripts/apply.sh >/dev/null 2>&1 || true
 check "re-enabled profiles back up" docker compose ps --status running -q grafana
 

@@ -5,8 +5,8 @@ Docker Compose config for my Raspberry Pis, deployed GitOps-style: push to
 
 | Host      | Hardware    | Site  | `COMPOSE_PROFILES` (suggested)                         |
 |-----------|-------------|-------|--------------------------------------------------------|
-| primary   | Pi 4        | home  | `dns,tailscale,backup`                                 |
-| secondary | Pi 5 + NVMe | cabin | `dns,observability,tailscale,backup,unifi,smart`       |
+| primary   | Pi 4        | home  | `sso,dns,tailscale,backup`                             |
+| secondary | Pi 5 + NVMe | cabin | `sso,dns,observability,tailscale,backup,unifi,smart`   |
 
 ## How it works
 
@@ -17,7 +17,8 @@ independent:** no service talks to another site.
 
 | Profile         | Services                                         |
 |-----------------|--------------------------------------------------|
-| _(always)_      | Traefik, Docker API proxy, Pocket ID, tinyauth   |
+| _(always)_      | Traefik, Docker API proxy, tinyauth              |
+| `sso`           | Pocket ID (one host per site)                    |
 | `dns`           | Pi-hole                                          |
 | `observability` | Prometheus, Loki, Grafana, Alloy, ntfy           |
 | `tailscale`     | Tailscale (remote access, LAN subnet route)      |
@@ -180,10 +181,15 @@ storage file means the switch to production gets a fresh, trusted cert.
 
 ### Single sign-on (once per site)
 
-Passkeys are bound to the site's domain, so each site has its own Pocket ID
-users.
+Each site runs one Pocket ID, on the host with the `sso` profile (ideally one
+that also runs `backup`: Pocket ID can only run as a single instance, so a
+restore is how it comes back). Passkeys are bound to that host's domain, so
+each site has its own users. The site's other hosts leave `sso` off and set
+`SSO_DOMAIN` and `SSO_IP` to that host's `BASE_DOMAIN` and `HOST_IP`; their
+logins go through it. If it's down, existing sessions keep working but new
+logins fail. Nothing else depends on it.
 
-1. Right after the first deploy, open `https://id.BASE_DOMAIN/setup` and
+1. Right after the sso host's first deploy, open `https://id.BASE_DOMAIN/setup` and
    register the admin passkey. Do this promptly: until someone does, anyone on
    the LAN could claim the admin account.
 2. Create an `admins` group and add yourself and your partner. The group page
@@ -195,15 +201,20 @@ users.
    and Grafana run server-side and hold a client secret. Restrict both to the
    `admins` group.
 
-   | Client   | Callback URL                                           | PKCE | `.env` keys              |
-   |----------|--------------------------------------------------------|------|--------------------------|
-   | tinyauth | `https://auth.BASE_DOMAIN/api/oauth/callback/pocketid` | off  | `TINYAUTH_OIDC_CLIENT_*` |
-   | grafana  | `https://grafana.BASE_DOMAIN/login/generic_oauth`      | on   | `GRAFANA_OIDC_CLIENT_*`  |
+   | Client   | Callback URL                                       | PKCE | `.env` keys              |
+   |----------|----------------------------------------------------|------|--------------------------|
+   | tinyauth | `https://auth.*.ZONE/api/oauth/callback/pocketid`  | off  | `TINYAUTH_OIDC_CLIENT_*` |
+   | grafana  | `https://grafana.*.ZONE/login/generic_oauth`       | on   | `GRAFANA_OIDC_CLIENT_*`  |
+
+   `ZONE` is the part every host's `BASE_DOMAIN` shares (for
+   `home.example.com`, `example.com`). Pocket ID's `*` matches one hostname
+   label, so the same two clients serve every host at the site with no
+   per-host setup.
 
    Grafana is configured to send PKCE. tinyauth sends it too, so PKCE on its
    client should also work, but only "off" has been tested.
 4. Copy each client's ID and secret (Pocket ID shows the secret once) into
-   `hosts/<name>.env` and run `scripts/push-env.sh <name>`. Members of
+   every host's `hosts/<name>.env` and run `scripts/push-env.sh <name>`. Members of
    `admins` get the Grafana Admin role; anyone else who logs in gets Viewer.
 
 ### Alerts on your phone
