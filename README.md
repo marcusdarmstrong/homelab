@@ -186,16 +186,20 @@ users.
 2. Create an `admins` group. Add users for yourself and your partner, and send
    them their one-time login link to enroll a passkey from their own password
    manager.
-3. Create two OIDC clients, both restricted to the `admins` group:
+3. Create two OIDC clients. Both are **confidential** (not public): tinyauth
+   and Grafana run server-side and hold a client secret. Restrict both to the
+   `admins` group.
 
-   | Client   | Callback URL                                          | `.env` keys                  |
-   |----------|-------------------------------------------------------|------------------------------|
-   | tinyauth | `https://auth.BASE_DOMAIN/api/oauth/callback/pocketid` | `TINYAUTH_OIDC_CLIENT_*`     |
-   | grafana  | `https://grafana.BASE_DOMAIN/login/generic_oauth`     | `GRAFANA_OIDC_CLIENT_*`      |
+   | Client   | Callback URL                                           | PKCE | `.env` keys              |
+   |----------|--------------------------------------------------------|------|--------------------------|
+   | tinyauth | `https://auth.BASE_DOMAIN/api/oauth/callback/pocketid` | off  | `TINYAUTH_OIDC_CLIENT_*` |
+   | grafana  | `https://grafana.BASE_DOMAIN/login/generic_oauth`      | on   | `GRAFANA_OIDC_CLIENT_*`  |
 
-4. Put the IDs and secrets in `hosts/<name>.env` and run
-   `scripts/provision.sh <name>`. Members of `admins` get the Grafana Admin role; anyone
-   else who logs in gets Viewer.
+   Grafana is configured to send PKCE. tinyauth sends it too, so PKCE on its
+   client should also work, but only "off" has been tested.
+4. Copy each client's ID and secret (Pocket ID shows the secret once) into
+   `hosts/<name>.env` and run `scripts/provision.sh <name>`. Members of
+   `admins` get the Grafana Admin role; anyone else who logs in gets Viewer.
 
 ### Alerts on your phone
 
