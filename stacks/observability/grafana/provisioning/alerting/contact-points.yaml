@@ -1,5 +1,5 @@
-# All alerts go to this site's ntfy server, using ntfy's built-in Grafana
-# message template.
+# All alerts go to the ntfy server next to Grafana, using ntfy's built-in
+# Grafana message template.
 
 apiVersion: 1
 

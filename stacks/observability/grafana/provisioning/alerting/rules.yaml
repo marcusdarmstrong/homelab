@@ -1,5 +1,5 @@
 # Grafana alert rules (file provisioning; JSON is valid YAML). Rules whose metrics
-# don't exist at a site (no backup profile, no SMART disk) stay quiet: noData = OK.
+# don't exist (no service with backups yet, no SMART disk) stay quiet: noData = OK.
 {
   "apiVersion": 1,
   "groups": [
@@ -260,7 +260,7 @@
             "severity": "critical"
           },
           "annotations": {
-            "summary": "{{ $labels.host }}: last successful backup was {{ $values.A.Value | printf \"%.0f\" }}h ago"
+            "summary": "{{ $labels.service }}: last successful backup was {{ $values.A.Value | printf \"%.0f\" }}h ago"
           },
           "data": [
             {
@@ -272,7 +272,7 @@
               },
               "model": {
                 "refId": "A",
-                "expr": "max by (host) (time() - homelab_backup_last_success_timestamp_seconds) / 3600",
+                "expr": "min by (service) (time() - homelab_backup_last_success_timestamp_seconds) / 3600",
                 "instant": true
               }
             },
@@ -289,6 +289,102 @@
                       "type": "gt",
                       "params": [
                         36
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "backup-never",
+          "title": "Backup never succeeded",
+          "condition": "C",
+          "for": "1h",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "{{ $labels.service }}: backups are failing and none has ever succeeded"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "max by (service) (homelab_backup_last_failure_timestamp_seconds) unless max by (service) (homelab_backup_last_success_timestamp_seconds)",
+                "instant": true
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "host-down",
+          "title": "Host down",
+          "condition": "C",
+          "for": "5m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "{{ $labels.host }} has stopped sending metrics: down, offline, or off the tailnet"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "group by (host) (max_over_time(up{job=\"node\"}[1d])) unless group by (host) (up{job=\"node\"})",
+                "instant": true
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
                       ]
                     }
                   }

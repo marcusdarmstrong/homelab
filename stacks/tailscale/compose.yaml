@@ -1,31 +1,33 @@
-# Remote access to this site. Profile: tailscale
+# Joins this host to the tailnet. Always on.
 #
-# Joins the tailnet as HOST_NAME and advertises TS_ROUTES (normally this
-# site's LAN) as a subnet route, so tailnet devices can reach the site's
-# services without any open ports. Approve the route in the Tailscale admin
-# console (or with autoApprovers). Give each site a distinct LAN subnet so
-# their routes don't collide.
+# The tailnet carries everything between hosts (SSO, metrics, logs) and from
+# your own devices to admin pages; household traffic never touches it. Each
+# host gets a stable 100.x address, published as BASE_DOMAIN by dns-records
+# (stacks/traefik). No subnet routes: the sites' LANs stay separate.
 #
-# For *.BASE_DOMAIN to resolve remotely, add a split-DNS nameserver in the
-# Tailscale admin console: BASE_DOMAIN -> this host's HOST_IP.
+# Joins as HOST_NAME, tagged tag:homelab (README → External setup).
 
 services:
   tailscale:
     image: tailscale/tailscale:v1.102.5
     restart: unless-stopped
-    profiles: [tailscale]
     network_mode: host
     environment:
-      # Only needed for first login; the node key then lives in tailscale-state.
       # An OAuth client secret (tskey-client-...) with a tag doesn't expire.
+      # Only used to log in the first time; the node key then lives in
+      # tailscale-state.
       TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_AUTH_ONCE: "true"
       TS_HOSTNAME: ${HOST_NAME:?}
-      TS_ROUTES: ${TS_ROUTES:-}
-      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:-}
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---advertise-tags=tag:homelab}
       TS_STATE_DIR: /var/lib/tailscale
+      # Kernel networking, so the host and its containers reach 100.x
+      # addresses directly.
       TS_USERSPACE: "false"
       # This host's DNS is managed by bootstrap.sh, not Tailscale.
       TS_ACCEPT_DNS: "false"
+      # Don't upload connection logs to Tailscale.
+      TS_NO_LOGS_NO_SUPPORT: "true"
     volumes:
       - tailscale-state:/var/lib/tailscale
     devices:

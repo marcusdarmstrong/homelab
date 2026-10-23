@@ -1,16 +1,28 @@
 # Passwordless single sign-on.
 #
-# Pocket ID (https://id.BASE_DOMAIN) is an OIDC provider that only accepts
+# Pocket ID (https://id.HOMELAB_DOMAIN) is an OIDC provider that only accepts
 # passkeys, so any WebAuthn authenticator works (1Password, Bitwarden, iCloud
-# Keychain, a YubiKey, ...). Profile: sso, on one host per site; it can't run
-# as more than one instance. The site's other hosts set SSO_DOMAIN and
-# SSO_IP to use that host's.
+# Keychain, a YubiKey, ...). Profile: sso, on exactly one host; it can't run
+# as more than one instance. Its name is the same wherever it runs, so
+# passkeys survive a move.
+#
+# It owns its state: pocket-id-restore fills an empty volume from the latest
+# backup before Pocket ID starts, and pocket-id-backup snapshots the volume
+# nightly (and once more when sso is taken off a host; see scripts/apply.sh).
+# Moving it to another host is a matter of moving the profile.
 #
 # tinyauth (https://auth.BASE_DOMAIN, always on) turns that into a Traefik
 # forward-auth middleware, `sso@docker`, for apps without their own OIDC
 # support. Apps that speak OIDC natively (Grafana) talk to Pocket ID directly.
 #
-# One-time setup per site: see "Single sign-on" in the README.
+# One-time setup: see "Single sign-on" in the README.
+
+x-restic: &restic
+  RESTIC_REPOSITORY: ${RESTIC_REPOSITORY_PREFIX:-}pocket-id
+  RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+  AWS_ACCESS_KEY_ID: ${RESTIC_S3_ACCESS_KEY_ID:-}
+  AWS_SECRET_ACCESS_KEY: ${RESTIC_S3_SECRET_ACCESS_KEY:-}
+  AWS_DEFAULT_REGION: ${RESTIC_S3_REGION:-auto}
 
 services:
   pocket-id:
@@ -19,8 +31,11 @@ services:
     profiles: [sso]
     security_opt:
       - no-new-privileges:true
+    depends_on:
+      pocket-id-restore:
+        condition: service_completed_successfully
     environment:
-      APP_URL: https://id.${BASE_DOMAIN}
+      APP_URL: https://id.${HOMELAB_DOMAIN:?}
       TRUST_PROXY: ${DOCKER_SUBNET:-172.30.0.0/24}
       ENCRYPTION_KEY: ${POCKET_ID_ENCRYPTION_KEY:-}
       ANALYTICS_DISABLED: "true"
@@ -32,20 +47,67 @@ services:
       - pocket-id-data:/app/data
     labels:
       - traefik.enable=true
-      - traefik.http.routers.pocket-id.rule=Host(`id.${BASE_DOMAIN}`)
+      - traefik.http.routers.pocket-id.rule=Host(`id.${HOMELAB_DOMAIN:?}`)
       - traefik.http.services.pocket-id.loadbalancer.server.port=1411
       - homelab.metrics.port=9464
+
+  # One-shot: restores the latest snapshot if the volume is empty, and refuses
+  # to let Pocket ID start if it can't tell.
+  pocket-id-restore:
+    image: mazzolino/restic:1.8.2
+    restart: "no"
+    profiles: [sso]
+    entrypoint: ["/backup/restore-if-empty.sh", "/data/pocket-id"]
+    environment: *restic
+    volumes:
+      - ./backup:/backup:ro
+      - pocket-id-data:/data/pocket-id
+    labels:
+      - homelab.oneshot=true
+      - homelab.config-hash=${CONFIG_HASH_AUTH_BACKUP:-}
+
+  # Nightly snapshots. Pocket ID's SQLite database is copied live; it writes
+  # rarely, but check what you restore. Every host's snapshots carry the same
+  # hostname, so the next host to run Pocket ID restores the latest one.
+  pocket-id-backup:
+    image: mazzolino/restic:1.8.2
+    restart: unless-stopped
+    profiles: [sso]
+    hostname: pocket-id
+    environment:
+      <<: *restic
+      TZ: ${TZ:-UTC}
+      BACKUP_CRON: ${BACKUP_CRON:-0 30 3 * * *}
+      RESTIC_BACKUP_SOURCES: /data/pocket-id
+      RESTIC_BACKUP_ARGS: --tag pocket-id
+      RESTIC_FORGET_ARGS: --prune --keep-daily 7 --keep-weekly 5 --keep-monthly 12
+      # For the textfile collector; Grafana alerts when the last success is
+      # too old.
+      POST_COMMANDS_SUCCESS: echo "homelab_backup_last_success_timestamp_seconds{service=\"pocket-id\"} $$(date +%s)" > /metrics/backup-pocket-id-success.prom
+      POST_COMMANDS_FAILURE: echo "homelab_backup_last_failure_timestamp_seconds{service=\"pocket-id\"} $$(date +%s)" > /metrics/backup-pocket-id-failure.prom
+    volumes:
+      - pocket-id-data:/data/pocket-id:ro
+      - /var/lib/homelab/metrics:/metrics
+      - pocket-id-restic-cache:/root/.cache/restic
+    labels:
+      # scripts/apply.sh takes one last snapshot, with Pocket ID stopped,
+      # before removing this when sso is taken off the host.
+      - homelab.final-backup=true
+
+  # Points id.HOMELAB_DOMAIN at whichever host runs Pocket ID.
+  pocket-id-records:
+    extends:
+      file: ../traefik/compose.yaml
+      service: dns-records
+    profiles: [sso]
+    environment:
+      IP4_DOMAINS: id.${HOMELAB_DOMAIN:?}
 
   tinyauth:
     image: ghcr.io/tinyauthapp/tinyauth:v5.2.0
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
-    depends_on:
-      pocket-id:
-        condition: service_started
-        # Not on hosts that use another host's Pocket ID.
-        required: false
     environment:
       TINYAUTH_APPURL: https://auth.${BASE_DOMAIN}
       TINYAUTH_AUTH_TRUSTEDPROXIES: ${DOCKER_SUBNET:-172.30.0.0/24}
@@ -57,14 +119,12 @@ services:
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_NAME: Pocket ID
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTID: ${TINYAUTH_OIDC_CLIENT_ID:-}
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_CLIENTSECRET: ${TINYAUTH_OIDC_CLIENT_SECRET:-}
-      TINYAUTH_OAUTH_PROVIDERS_POCKETID_AUTHURL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/authorize
-      TINYAUTH_OAUTH_PROVIDERS_POCKETID_TOKENURL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/token
-      TINYAUTH_OAUTH_PROVIDERS_POCKETID_USERINFOURL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/userinfo
+      # Exchanged server-side over the tailnet, wherever Pocket ID runs.
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_AUTHURL: https://id.${HOMELAB_DOMAIN:?}/authorize
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_TOKENURL: https://id.${HOMELAB_DOMAIN:?}/api/oidc/token
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_USERINFOURL: https://id.${HOMELAB_DOMAIN:?}/api/oidc/userinfo
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_REDIRECTURL: https://auth.${BASE_DOMAIN}/api/oauth/callback/pocketid
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_SCOPES: openid email profile groups
-    # Exchanges codes with Pocket ID server-side (see SSO_IP).
-    extra_hosts:
-      - id.${SSO_DOMAIN:-${BASE_DOMAIN}}:${SSO_IP:-host-gateway}
     volumes:
       - tinyauth-data:/data
     networks:
@@ -79,4 +139,5 @@ services:
 
 volumes:
   pocket-id-data:
+  pocket-id-restic-cache:
   tinyauth-data:

@@ -1,6 +1,7 @@
-// Grafana Alloy pipeline for this site: collect host, container, service,
-// WAN-probe and log data and push it to the local Prometheus/Loki. Every
-// series and stream is tagged with `host` and `site` from the environment.
+// Grafana Alloy pipeline for this host: collect host, container, service,
+// WAN-probe and log data and push it over the tailnet to Prometheus and Loki,
+// wherever the observability profile runs. Every series and stream is tagged
+// with `host` and `site` from the environment.
 
 // ---------------------------------------------------------------- metrics
 
@@ -19,7 +20,7 @@ prometheus.exporter.unix "host" {
 		fs_types_exclude     = "^(autofs|binfmt_misc|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|pstore|securityfs|squashfs|sysfs|tmpfs|tracefs)$"
 	}
 
-	// Written by scripts/sync.sh (deploy status) and the backup container.
+	// Written by scripts/sync.sh (deploy status) and backup sidecars.
 	textfile {
 		directory = "/host/root/var/lib/homelab/metrics"
 	}
@@ -179,7 +180,7 @@ prometheus.scrape "labelled" {
 // here first. smartctl and UniFi are kept whole: they're why those profiles
 // exist, and their hosts have NVMe disks.
 prometheus.relabel "keep" {
-	forward_to = [prometheus.remote_write.local.receiver]
+	forward_to = [prometheus.remote_write.central.receiver]
 
 	rule {
 		source_labels = ["job", "__name__"]
@@ -208,9 +209,14 @@ prometheus.relabel "keep" {
 	}
 }
 
-prometheus.remote_write "local" {
+prometheus.remote_write "central" {
 	endpoint {
-		url = "http://prometheus:9090/api/v1/write"
+		url = "https://prometheus." + sys.env("HOMELAB_DOMAIN") + "/api/v1/write"
+
+		// Only the local test stack, which has no real certificate, sets this.
+		tls_config {
+			insecure_skip_verify = sys.env("ALLOY_TLS_INSECURE") == "true"
+		}
 	}
 
 	external_labels = {
@@ -241,7 +247,7 @@ loki.source.docker "containers" {
 	targets       = discovery.docker.containers.targets
 	labels        = {"job" = "docker"}
 	relabel_rules = discovery.relabel.logs.rules
-	forward_to    = [loki.write.local.receiver]
+	forward_to    = [loki.write.central.receiver]
 }
 
 loki.relabel "journal" {
@@ -262,12 +268,16 @@ loki.source.journal "system" {
 	max_age       = "12h"
 	labels        = {"job" = "journal"}
 	relabel_rules = loki.relabel.journal.rules
-	forward_to    = [loki.write.local.receiver]
+	forward_to    = [loki.write.central.receiver]
 }
 
-loki.write "local" {
+loki.write "central" {
 	endpoint {
-		url = "http://loki:3100/loki/api/v1/push"
+		url = "https://loki." + sys.env("HOMELAB_DOMAIN") + "/loki/api/v1/push"
+
+		tls_config {
+			insecure_skip_verify = sys.env("ALLOY_TLS_INSECURE") == "true"
+		}
 	}
 
 	external_labels = {

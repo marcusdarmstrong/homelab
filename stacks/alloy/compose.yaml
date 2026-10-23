@@ -1,0 +1,55 @@
+# Metrics and logs from this host. Always on.
+#
+# Alloy collects host, container and service metrics, WAN probes, and Docker
+# and journald logs, and pushes them over the tailnet to Prometheus and Loki
+# at prometheus.HOMELAB_DOMAIN and loki.HOMELAB_DOMAIN, wherever the
+# observability profile runs.
+#
+# Any container on the project network can opt in to metrics scraping with
+# labels:
+#   homelab.metrics.port=<port>
+#   homelab.metrics.path=/metrics   (optional)
+
+services:
+  alloy:
+    image: grafana/alloy:v1.20.0
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    # Host-level collection (process, cgroup and disk stats; ICMP probes)
+    # needs to see the real host.
+    privileged: true
+    pid: host
+    environment:
+      HOST_NAME: ${HOST_NAME:?}
+      SITE: ${SITE:?}
+      HOMELAB_DOMAIN: ${HOMELAB_DOMAIN:?}
+    volumes:
+      - ./config/config.alloy:/etc/alloy/config.alloy:ro
+      - /:/host/root:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    # Alloy's data is a write-ahead buffer for metrics on their way to
+    # Prometheus plus log read positions; neither needs to survive a reboot,
+    # and on disk the buffer rewrites every sample. It also rides out a
+    # Prometheus that's briefly unreachable.
+    tmpfs:
+      - /var/lib/alloy/data:size=256m
+    networks:
+      - default
+      - docker-api
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.alloy.rule=Host(`alloy.${BASE_DOMAIN}`)
+      - traefik.http.routers.alloy.middlewares=sso@docker
+      - traefik.http.services.alloy.loadbalancer.server.port=12345
+      - homelab.config-hash=${CONFIG_HASH_ALLOY_CONFIG:-}

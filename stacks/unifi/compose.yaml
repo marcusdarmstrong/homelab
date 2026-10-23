@@ -1,5 +1,5 @@
 # UniFi controller metrics (APs, switches, PoE, clients). Profile: unifi
-# Needs the observability profile to be useful.
+# Run it on one host at each site: it polls that site's console.
 #
 # Authenticates with a UniFi API key (UniFi Network > Settings > Control
 # Plane > Integrations), so no controller account or password is involved.

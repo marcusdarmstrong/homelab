@@ -1,29 +1,25 @@
-# The whole homelab is one compose project. Every host runs the same code; its
-# .env decides what runs there:
+# The whole homelab is one compose project. Every host runs the same code;
+# its committed settings (hosts/<name>.env) decide what runs there:
 #
-#   COMPOSE_PROFILES=dns,observability,backup
+#   COMPOSE_PROFILES=dns,observability
 #
-# Each site is self-contained: nothing here talks to another site.
-#
-# Always on:      traefik, docker-proxy, tinyauth
+# Always on:      traefik, docker-proxy, dns-records, tinyauth, tailscale, alloy
 # Profiles:
-#   sso            Pocket ID (one host per site)
-#   dns            Pi-hole
-#   observability  Prometheus, Loki, Grafana, Alloy, ntfy (alerts)
-#   tailscale      remote access + LAN subnet route
-#   backup         nightly restic snapshots of the Docker volumes
-#   unifi          UniFi controller metrics (needs observability)
-#   smart          NVMe/disk SMART metrics (needs observability)
+#   sso            Pocket ID, with its backups (exactly one host)
+#   observability  Prometheus, Loki, Grafana, ntfy (exactly one host)
+#   dns            Pi-hole (any number of hosts)
+#   unifi          UniFi console metrics (one host per site)
+#   smart          NVMe/disk SMART metrics (hosts with such a disk)
 
 name: homelab
 
 include:
   - stacks/traefik/compose.yaml
+  - stacks/tailscale/compose.yaml
+  - stacks/alloy/compose.yaml
   - stacks/auth/compose.yaml
   - stacks/pihole/compose.yaml
   - stacks/observability/compose.yaml
-  - stacks/tailscale/compose.yaml
-  - stacks/backup/compose.yaml
   - stacks/unifi/compose.yaml
   - stacks/smart/compose.yaml
 

@@ -1,12 +1,18 @@
-# Reverse proxy + automatic HTTPS. Always on.
+# Reverse proxy, automatic HTTPS and this host's DNS records. Always on.
 #
 # Certificates come from Let's Encrypt via the DNS-01 challenge, so nothing
-# has to be reachable from the internet. One wildcard cert (*.BASE_DOMAIN) is
-# issued per host and renewed automatically ~30 days before expiry.
+# has to be reachable from the internet. Each host gets one cert covering
+# *.BASE_DOMAIN (its own pages) and *.HOMELAB_DOMAIN (services that run once,
+# wherever they run), renewed automatically ~30 days before expiry.
 #
 # Services opt in with `traefik.enable=true` labels. A Host() rule is all a
 # service needs; TLS and the cert resolver are entrypoint defaults below.
-# Admin UIs add the `sso@docker` middleware (stacks/auth).
+# Admin pages add the `sso@docker` middleware (stacks/auth); endpoints only
+# other hosts use add `tailnet@docker`.
+#
+# The `public` entrypoint (8443) is for the few routers meant to be reached
+# from the internet through a port forward; a router is only on it if it says
+# so with `traefik.http.routers.<name>.entrypoints=public`.
 
 services:
   traefik:
@@ -32,7 +38,9 @@ services:
       - --entrypoints.websecure.asDefault=true
       - --entrypoints.websecure.http.tls.certresolver=letsencrypt
       - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN:?}
-      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN:?}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN:?},*.${HOMELAB_DOMAIN:?}
+      - --entrypoints.public.address=:8443
+      - --entrypoints.public.http.tls=true
 
       # Scraped by Alloy over the project network; not published.
       - --entrypoints.metrics.address=:8082
@@ -46,12 +54,13 @@ services:
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/${ACME_STORAGE:-acme.json}
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
       - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
-      # Check propagation against public resolvers: Pi-hole answers for
-      # BASE_DOMAIN locally and would never see the _acme-challenge TXT record.
+      # Check propagation against public resolvers, independent of whatever
+      # the host happens to use.
       - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
     ports:
       - "80:80"
       - "443:443"
+      - "8443:8443"
     environment:
       # Credentials for the DNS provider. For providers other than Cloudflare
       # see https://go-acme.github.io/lego/dns/ and add the matching variables.
@@ -60,9 +69,7 @@ services:
       - certs:/letsencrypt
     networks:
       default:
-        # Containers can reach auth.BASE_DOMAIN without host or LAN DNS.
-        # (Pocket ID's name comes from extra_hosts, since it may be on another
-        # host.)
+        # Containers can reach this host's tinyauth without leaving the host.
         aliases:
           - auth.${BASE_DOMAIN}
       docker-api:
@@ -78,6 +85,9 @@ services:
       - traefik.http.routers.dashboard.rule=Host(`traefik.${BASE_DOMAIN}`)
       - traefik.http.routers.dashboard.service=api@internal
       - traefik.http.routers.dashboard.middlewares=sso@docker
+      # Only the tailnet (other hosts, your devices) and this host's own
+      # containers.
+      - traefik.http.middlewares.tailnet.ipallowlist.sourcerange=100.64.0.0/10,fd7a:115c:a1e0::/48,${DOCKER_SUBNET:-172.30.0.0/24}
       - homelab.metrics.port=8082
 
   # Read-only Docker API for Traefik, Alloy and tinyauth, so none of them
@@ -100,6 +110,32 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - docker-api
+
+  # Keeps BASE_DOMAIN and *.BASE_DOMAIN pointing at this host's tailnet
+  # address in Cloudflare, so a rebuilt Pi (new address) fixes its own
+  # records. Services that run once extend this to publish their own names
+  # from wherever they run.
+  dns-records:
+    image: favonia/cloudflare-ddns:1.17.1
+    restart: unless-stopped
+    # Reads the tailscale0 interface's address.
+    network_mode: host
+    depends_on:
+      tailscale:
+        condition: service_started
+        required: false
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      CLOUDFLARE_API_TOKEN: ${CF_DNS_API_TOKEN:-}
+      TZ: ${TZ:-UTC}
+      IP4_DOMAINS: ${BASE_DOMAIN:?},*.${BASE_DOMAIN:?}
+      IP4_PROVIDER: local.iface:tailscale0
+      IP6_PROVIDER: none
+      # Kept when the service stops or moves; the next host to run it
+      # overwrites them.
+      DELETE_ON_STOP: "false"
+      UPDATE_CRON: "@every 5m"
 
 volumes:
   certs:

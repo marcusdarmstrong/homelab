@@ -1,17 +1,13 @@
-# Site observability. Profile: observability
+# Central observability. Profile: observability, on exactly one host.
 #
-# Alloy collects host, container and service metrics plus Docker and journald
-# logs on this host and pushes them to the local Prometheus and Loki. Grafana
-# sits on top (Pocket ID login) and sends alerts to ntfy. Nothing leaves the
-# site except ntfy's iOS wake-up relay (see NTFY_UPSTREAM_BASE_URL).
+# Every host's Alloy (stacks/alloy) pushes metrics and logs over the tailnet
+# to prometheus.HOMELAB_DOMAIN and loki.HOMELAB_DOMAIN. Grafana sits on top
+# (Pocket ID login) and sends alerts to ntfy, which phones reach from the
+# internet (see ntfy below). Metrics and logs are history: when the profile
+# moves to another host, they start over there.
 #
 # Services with config files here carry `homelab.config-hash` (set by
 # scripts/apply.sh) so that editing a config file recreates them.
-#
-# Any container on the project network can opt in to metrics scraping with
-# labels:
-#   homelab.metrics.port=<port>
-#   homelab.metrics.path=/metrics   (optional)
 
 services:
   prometheus:
@@ -31,8 +27,14 @@ services:
       - prometheus-data:/prometheus
     labels:
       - traefik.enable=true
+      # The UI, under this host's name behind SSO.
       - traefik.http.routers.prometheus.rule=Host(`prometheus.${BASE_DOMAIN}`)
       - traefik.http.routers.prometheus.middlewares=sso@docker
+      - traefik.http.routers.prometheus.service=prometheus
+      # Remote write from every host's Alloy, at the fixed name.
+      - traefik.http.routers.prometheus-write.rule=Host(`prometheus.${HOMELAB_DOMAIN:?}`) && Path(`/api/v1/write`)
+      - traefik.http.routers.prometheus-write.middlewares=tailnet@docker
+      - traefik.http.routers.prometheus-write.service=prometheus
       - traefik.http.services.prometheus.loadbalancer.server.port=9090
       - homelab.metrics.port=9090
       - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_PROMETHEUS:-}
@@ -53,6 +55,11 @@ services:
       - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
       - loki-data:/loki
     labels:
+      # Pushes from every host's Alloy, at the fixed name.
+      - traefik.enable=true
+      - traefik.http.routers.loki-push.rule=Host(`loki.${HOMELAB_DOMAIN:?}`) && Path(`/loki/api/v1/push`)
+      - traefik.http.routers.loki-push.middlewares=tailnet@docker
+      - traefik.http.services.loki.loadbalancer.server.port=3100
       - homelab.metrics.port=3100
       - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_LOKI:-}
 
@@ -66,7 +73,7 @@ services:
       - prometheus
       - loki
     environment:
-      GF_SERVER_ROOT_URL: https://grafana.${BASE_DOMAIN}
+      GF_SERVER_ROOT_URL: https://grafana.${HOMELAB_DOMAIN:?}
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       # SQLite WAL mode: far fewer page and journal rewrites per write.
@@ -87,72 +94,29 @@ services:
       GF_AUTH_GENERIC_OAUTH_CLIENT_ID: ${GRAFANA_OIDC_CLIENT_ID:-}
       GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: ${GRAFANA_OIDC_CLIENT_SECRET:-}
       GF_AUTH_GENERIC_OAUTH_SCOPES: openid email profile groups
-      GF_AUTH_GENERIC_OAUTH_AUTH_URL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/authorize
-      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/token
-      GF_AUTH_GENERIC_OAUTH_API_URL: https://id.${SSO_DOMAIN:-${BASE_DOMAIN}}/api/oidc/userinfo
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: https://id.${HOMELAB_DOMAIN:?}/authorize
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: https://id.${HOMELAB_DOMAIN:?}/api/oidc/token
+      GF_AUTH_GENERIC_OAUTH_API_URL: https://id.${HOMELAB_DOMAIN:?}/api/oidc/userinfo
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: contains(groups[*], 'admins') && 'Admin' || 'Viewer'
       # Read by provisioning/alerting/contact-points.yaml.
       NTFY_GRAFANA_TOKEN: ${NTFY_GRAFANA_TOKEN:-}
-    # Exchanges codes with Pocket ID server-side (see SSO_IP).
-    extra_hosts:
-      - id.${SSO_DOMAIN:-${BASE_DOMAIN}}:${SSO_IP:-host-gateway}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     labels:
       - traefik.enable=true
-      - traefik.http.routers.grafana.rule=Host(`grafana.${BASE_DOMAIN}`)
+      - traefik.http.routers.grafana.rule=Host(`grafana.${HOMELAB_DOMAIN:?}`)
       - traefik.http.services.grafana.loadbalancer.server.port=3000
       - homelab.metrics.port=3000
       - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_GRAFANA:-}
 
-  alloy:
-    image: grafana/alloy:v1.20.0
-    restart: unless-stopped
-    profiles: [observability]
-    command:
-      - run
-      - --server.http.listen-addr=0.0.0.0:12345
-      - --storage.path=/var/lib/alloy/data
-      - /etc/alloy/config.alloy
-    # Host-level collection (process, cgroup and disk stats; ICMP probes)
-    # needs to see the real host.
-    privileged: true
-    pid: host
-    environment:
-      HOST_NAME: ${HOST_NAME:?}
-      SITE: ${SITE:?}
-    volumes:
-      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-      - /:/host/root:ro,rslave
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-      - /dev/disk:/dev/disk:ro
-      - /var/log/journal:/var/log/journal:ro
-      - /run/log/journal:/run/log/journal:ro
-      - /etc/machine-id:/etc/machine-id:ro
-    # Alloy's data is a write-ahead buffer for metrics on their way to
-    # Prometheus plus log read positions; neither needs to survive a reboot,
-    # and on disk the buffer rewrites every sample.
-    tmpfs:
-      - /var/lib/alloy/data:size=256m
-    networks:
-      - default
-      - docker-api
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.alloy.rule=Host(`alloy.${BASE_DOMAIN}`)
-      - traefik.http.routers.alloy.middlewares=sso@docker
-      - traefik.http.services.alloy.loadbalancer.server.port=12345
-      - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_ALLOY:-}
-
   # Push notifications for Grafana alerts. Phones subscribe to the
-  # `homelab-alerts` topic at https://ntfy.BASE_DOMAIN (on the LAN or over
-  # Tailscale). Anyone who can reach it may read; only Grafana's token may
-  # publish.
+  # `homelab-alerts` topic at https://ntfy.HOMELAB_DOMAIN as user `phone`,
+  # from anywhere: the name points at this site's public address
+  # (ntfy-records), and the site's gateway forwards 443 to Traefik's public
+  # entrypoint, which serves only ntfy. Nothing is readable without logging
+  # in; only Grafana's token may publish.
   ntfy:
     image: binwiederhier/ntfy:v2.28.0
     restart: unless-stopped
@@ -162,13 +126,13 @@ services:
     command: serve
     environment:
       TZ: ${TZ:-UTC}
-      NTFY_BASE_URL: https://ntfy.${BASE_DOMAIN}
+      NTFY_BASE_URL: https://ntfy.${HOMELAB_DOMAIN:?}
       NTFY_BEHIND_PROXY: "true"
       NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
       NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
-      NTFY_AUTH_DEFAULT_ACCESS: read-only
-      NTFY_AUTH_USERS: grafana:${NTFY_GRAFANA_PASSWORD_HASH:-}:user
-      NTFY_AUTH_ACCESS: grafana:homelab-alerts:write-only
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_AUTH_USERS: grafana:${NTFY_GRAFANA_PASSWORD_HASH:-}:user,phone:${NTFY_PHONE_PASSWORD_HASH:-}:user
+      NTFY_AUTH_ACCESS: grafana:homelab-alerts:write-only,phone:homelab-alerts:read-only
       NTFY_AUTH_TOKENS: grafana:${NTFY_GRAFANA_TOKEN:-}:grafana
       # iOS can only be woken through Apple's push service. ntfy.sh relays a
       # content-free poll request; the message itself stays on this server.
@@ -178,9 +142,35 @@ services:
       - ntfy-data:/var/lib/ntfy
     labels:
       - traefik.enable=true
-      - traefik.http.routers.ntfy.rule=Host(`ntfy.${BASE_DOMAIN}`)
+      - traefik.http.routers.ntfy.rule=Host(`ntfy.${HOMELAB_DOMAIN:?}`)
+      - traefik.http.routers.ntfy.service=ntfy
+      - traefik.http.routers.ntfy-public.rule=Host(`ntfy.${HOMELAB_DOMAIN:?}`)
+      - traefik.http.routers.ntfy-public.entrypoints=public
+      - traefik.http.routers.ntfy-public.service=ntfy
       - traefik.http.services.ntfy.loadbalancer.server.port=80
       - homelab.metrics.port=80
+
+  # Points grafana, prometheus and loki at this host's tailnet address. Also
+  # pings HEALTHCHECKS_URL every five minutes, so an outside service notices
+  # when this host, and with it all alerting, goes quiet.
+  observability-records:
+    extends:
+      file: ../traefik/compose.yaml
+      service: dns-records
+    profiles: [observability]
+    environment:
+      IP4_DOMAINS: grafana.${HOMELAB_DOMAIN:?},prometheus.${HOMELAB_DOMAIN:?},loki.${HOMELAB_DOMAIN:?}
+      HEALTHCHECKS: ${HEALTHCHECKS_URL:-}
+
+  # Points ntfy at this site's public address, for phones away from home.
+  ntfy-records:
+    extends:
+      file: ../traefik/compose.yaml
+      service: dns-records
+    profiles: [observability]
+    environment:
+      IP4_DOMAINS: ntfy.${HOMELAB_DOMAIN:?}
+      IP4_PROVIDER: cloudflare.trace
 
 volumes:
   prometheus-data:

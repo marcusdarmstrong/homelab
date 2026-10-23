@@ -1,6 +1,5 @@
 # NVMe/disk SMART metrics (wear, temperature, health). Profile: smart
-# Needs the observability profile to be useful. Mostly relevant on hosts
-# with an NVMe or SSD; SD cards don't report SMART.
+# Only useful on hosts with an NVMe or SSD; SD cards don't report SMART.
 #
 # Built locally: upstream publishes no arm64 image, only arm64 binaries.
 

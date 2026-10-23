@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Converge this host to the checked-out commit and the profiles in .env.
+# Converge this host to the checked-out commit, its settings
+# (hosts/<HOST_NAME>.env) and its secrets (.env).
 #
 # `up --remove-orphans` handles services deleted from the compose files, but
 # not services whose profile was switched off, since those are still defined.
-# They get stopped explicitly below.
+# They get stopped explicitly below, after a final backup of any state they
+# own.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -12,7 +14,7 @@ source "$REPO_DIR/scripts/lib.sh"
 
 cd "$REPO_DIR"
 # COMPOSE_ENV_FILES lets test/smoke.sh supply its own env.
-[[ -f .env || -n "${COMPOSE_ENV_FILES:-}" ]] || die "missing $REPO_DIR/.env (copy .env.example and fill it in)"
+[[ -f .env || -n "${COMPOSE_ENV_FILES:-}" ]] || die "missing $REPO_DIR/.env (scripts/push-env.sh installs it)"
 load_host_env
 placeholders="$(placeholder_keys)"
 [[ -z "$placeholders" ]] || die "placeholder values in .env: $placeholders"
@@ -20,9 +22,9 @@ placeholders="$(placeholder_keys)"
 # Compose interpolates every service whether or not its profile is active, so
 # profile-specific secrets can't use ${VAR:?}. Check them here instead.
 declare -A required_by_profile=(
-  [sso]="POCKET_ID_ENCRYPTION_KEY"
-  [observability]="NTFY_GRAFANA_TOKEN NTFY_GRAFANA_PASSWORD_HASH"
-  [backup]="RESTIC_REPOSITORY RESTIC_PASSWORD"
+  [always]="CF_DNS_API_TOKEN TS_AUTHKEY"
+  [sso]="POCKET_ID_ENCRYPTION_KEY RESTIC_REPOSITORY_PREFIX RESTIC_PASSWORD"
+  [observability]="NTFY_GRAFANA_TOKEN NTFY_GRAFANA_PASSWORD_HASH NTFY_PHONE_PASSWORD_HASH"
   [unifi]="UNIFI_URL UNIFI_API_KEY"
 )
 # Only obtainable after the first deploy (they come from Pocket ID), so
@@ -69,20 +71,38 @@ running="$(docker ps -a --filter "label=com.docker.compose.project=$project" \
 disabled="$(comm -13 <(echo "$enabled") <(echo "$running"))"
 if [[ -n "$disabled" ]]; then
   log "stopping services with disabled profiles: $(echo "$disabled" | tr '\n' ' ')"
+  # A backup sidecar (label homelab.final-backup) takes one last snapshot
+  # first, with the rest of the profile already stopped so the copy is
+  # consistent. That's what lets a service move hosts without losing
+  # anything. If it fails, nothing is removed and the next sync retries.
+  final="$(docker ps --filter "label=com.docker.compose.project=$project" --filter label=homelab.final-backup=true \
+             --format '{{.Label "com.docker.compose.service"}}' | sort -u | comm -12 <(echo "$disabled") -)"
+  if [[ -n "$final" ]]; then
+    others="$(comm -23 <(echo "$disabled") <(echo "$final"))"
+    # shellcheck disable=SC2086
+    [[ -z "$others" ]] || COMPOSE_PROFILES='*' docker compose stop $others
+    for service in $final; do
+      log "final backup by $service"
+      COMPOSE_PROFILES='*' docker compose exec -T "$service" backup ||
+        die "final backup by $service failed; leaving it in place to retry"
+    done
+  fi
   # shellcheck disable=SC2086
   COMPOSE_PROFILES='*' docker compose rm --stop --force $disabled
 fi
 
 # Only some services have healthchecks, and a container that crashes a second
 # after starting still looks "running" to --wait. Watch for a while and fail
-# if anything stops or restarts.
+# if anything stops or restarts. One-shot containers (label homelab.oneshot)
+# are meant to have exited; compose already failed the deploy if one failed.
 container_states() {
   docker ps -aq --filter "label=com.docker.compose.project=$project" |
-    xargs docker inspect -f '{{.Name}} {{.RestartCount}} {{.State.Status}}'
+    xargs docker inspect -f '{{.Name}} {{.RestartCount}} {{.State.Status}} {{index .Config.Labels "homelab.oneshot"}}'
 }
 before="$(container_states)"
 sleep "${HOMELAB_SETTLE_SECONDS:-30}"
-unstable="$(awk 'NR == FNR { restarts[$1] = $2; next }
+unstable="$(awk '$4 == "true" { next }
+                 NR == FNR { restarts[$1] = $2; next }
                  $3 != "running" || $2 != restarts[$1] { print substr($1, 2) }' \
               <(echo "$before") <(container_states))"
 [[ -z "$unstable" ]] || die "not staying up: $(echo "$unstable" | tr '\n' ' ')"
