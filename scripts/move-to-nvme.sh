@@ -63,7 +63,8 @@ cp /boot/firmware/{user-data,meta-data,network-config} "$work/boot/"
 # country): anything on the card's command line the image's lacks, except
 # root=, which must stay the image's own.
 cmdline="$(cat "$work/boot/cmdline.txt")"
-read -ra card_args </boot/firmware/cmdline.txt
+# (Imager leaves no trailing newline, so read reports EOF.)
+read -ra card_args </boot/firmware/cmdline.txt || true
 for arg in "${card_args[@]}"; do
   [[ $arg == root=* || " $cmdline " == *" ${arg%%=*}="* || " $cmdline " == *" $arg "* ]] || cmdline+=" $arg"
 done
