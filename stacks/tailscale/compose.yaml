@@ -35,6 +35,15 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    # Healthy once the host has its 100.x address, which the dns-records
+    # services wait for.
+    healthcheck:
+      test: ["CMD", "tailscale", "ip", "-4"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 2m
+      start_interval: 2s
 
 volumes:
   tailscale-state:

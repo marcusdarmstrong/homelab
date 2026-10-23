@@ -37,8 +37,10 @@ services:
       - --entrypoints.websecure.address=:443
       - --entrypoints.websecure.asDefault=true
       - --entrypoints.websecure.http.tls.certresolver=letsencrypt
-      - --entrypoints.websecure.http.tls.domains[0].main=${BASE_DOMAIN:?}
-      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN:?},*.${HOMELAB_DOMAIN:?}
+      # *.HOMELAB_DOMAIN already covers BASE_DOMAIN itself; Let's Encrypt
+      # refuses an order that lists both.
+      - --entrypoints.websecure.http.tls.domains[0].main=*.${HOMELAB_DOMAIN:?}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN:?}
       - --entrypoints.public.address=:8443
       - --entrypoints.public.http.tls=true
 
@@ -120,9 +122,11 @@ services:
     restart: unless-stopped
     # Reads the tailscale0 interface's address.
     network_mode: host
+    # Until tailscale0 has its address there's nothing to publish, and the
+    # next check would be 5 minutes away.
     depends_on:
       tailscale:
-        condition: service_started
+        condition: service_healthy
         required: false
     security_opt:
       - no-new-privileges:true
