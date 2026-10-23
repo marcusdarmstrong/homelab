@@ -1,0 +1,3 @@
+# Domains no Pi-hole blocks, one per line (exact matches). Applied on the next
+# deploy (sync.sh); domains allowed in the web UI are removed within the
+# hour.

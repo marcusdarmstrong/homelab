@@ -1,0 +1,3 @@
+# Blocklists every Pi-hole uses, one URL per line. Applied on the next deploy
+# (sync.sh); lists added in the web UI are removed within the hour.
+https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts

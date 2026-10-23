@@ -5,8 +5,9 @@
 # password is disabled.
 #
 # Settings passed as FTLCONF_* variables are managed by git and show as
-# read-only in the web UI. Anything not set here (blocklists, groups, clients)
-# can still be changed in the UI and lives in the pihole-data volume.
+# read-only in the web UI, and so are the blocklists and allowed domains in
+# lists/ (applied by pihole-lists). Anything else changed in the UI (groups,
+# clients) lives only in the pihole-data volume and is lost with it.
 
 services:
   pihole:
@@ -24,13 +25,13 @@ services:
       # network rather than the LAN.
       FTLCONF_dns_listeningMode: all
       FTLCONF_dns_upstreams: ${PIHOLE_UPSTREAMS:-1.1.1.1;1.0.0.1}
-      # Semicolon-separated dnsmasq lines; by default, resolve *.BASE_DOMAIN
-      # to this host.
-      FTLCONF_misc_dnsmasq_lines: ${PIHOLE_DNSMASQ_LINES:-address=/${BASE_DOMAIN}/${HOST_IP}}
+      # Semicolon-separated dnsmasq lines, if ever needed. Homelab names come
+      # from public DNS like any other.
+      FTLCONF_misc_dnsmasq_lines: ${PIHOLE_DNSMASQ_LINES:-}
       # The host keeps time (systemd-timesyncd); a container can't set the clock.
       FTLCONF_ntp_sync_active: "false"
       # How often query stats are flushed to the long-term database. Raise it
-      # on SD-card hosts (see .env.example).
+      # on SD-card hosts (config/sdcard.env).
       FTLCONF_database_DBinterval: ${PIHOLE_DB_INTERVAL:-60}
     volumes:
       - pihole-data:/etc/pihole
@@ -46,6 +47,25 @@ services:
       - traefik.http.services.pihole.loadbalancer.server.port=80
       - traefik.http.middlewares.pihole-admin.redirectregex.regex=^(https://[^/]+)/?$$
       - traefik.http.middlewares.pihole-admin.redirectregex.replacement=$${1}/admin/
+
+  # Makes the blocklists and allowed domains match lists/ on every deploy and
+  # hourly after that. A failed sync exits, so a broken list fails the deploy.
+  pihole-lists:
+    image: pihole/pihole:2026.09.0
+    restart: unless-stopped
+    profiles: [dns]
+    depends_on:
+      pihole:
+        condition: service_healthy
+    init: true
+    entrypoint: ["bash", "-c", "while /lists/sync.sh; do sleep 3600; done; exit 1"]
+    # The image's own check probes DNS, which this container doesn't serve.
+    healthcheck:
+      disable: true
+    volumes:
+      - ./lists:/lists:ro
+    labels:
+      - homelab.config-hash=${CONFIG_HASH_PIHOLE_LISTS:-}
 
 volumes:
   pihole-data:
