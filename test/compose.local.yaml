@@ -1,13 +1,37 @@
 # Overrides for running the stack on Docker Desktop (test/smoke.sh).
 # Relative paths resolve against the repo root.
 #
+# - Tailscale and the Cloudflare record updaters don't run; Traefik answers
+#   for the service names itself through network aliases.
 # - Pi-only host mounts (journal, disks, host root) are dropped, and Pi-hole
 #   listens on 1053.
-# - Apps calling Pocket ID server-side skip TLS verification, since Traefik
-#   serves its self-signed default certificate locally.
+# - Apps calling other services over HTTPS skip TLS verification, since
+#   Traefik serves its self-signed default certificate locally.
 # - Grafana's admin API is enabled so the test can inspect provisioning.
+# - Backups go to a local restic repository.
 
 services:
+  tailscale:
+    profiles: !override [never]
+  dns-records:
+    profiles: !override [never]
+  pocket-id-records:
+    profiles: !override [never]
+  observability-records:
+    profiles: !override [never]
+  ntfy-records:
+    profiles: !override [never]
+
+  traefik:
+    networks:
+      default:
+        aliases:
+          - id.lab.test
+          - grafana.lab.test
+          - ntfy.lab.test
+          - prometheus.lab.test
+          - loki.lab.test
+
   # Port 53 is usually taken on a Mac.
   pihole:
     ports: !override
@@ -17,6 +41,17 @@ services:
   pocket-id:
     environment:
       STATIC_API_KEY: ${POCKET_ID_STATIC_API_KEY}
+
+  pocket-id-restore:
+    volumes:
+      - local-restic:/restic
+
+  pocket-id-backup:
+    volumes: !override
+      - pocket-id-data:/data/pocket-id:ro
+      - local-metrics:/metrics
+      - local-restic:/restic
+      - pocket-id-restic-cache:/root/.cache/restic
 
   tinyauth:
     environment:
@@ -29,23 +64,15 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: local
 
   alloy:
+    environment:
+      ALLOY_TLS_INSECURE: "true"
     volumes: !override
-      - ./stacks/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./stacks/alloy/config/config.alloy:/etc/alloy/config.alloy:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
       - local-metrics:/host/root/var/lib/homelab/metrics
-
-  backup:
-    environment:
-      # Don't back the local test repository up into itself.
-      RESTIC_BACKUP_ARGS: --tag homelab --exclude /source/homelab_local-restic --exclude /source/homelab_restic-cache --exclude /source/homelab_grafana-data/_data/plugins
-    volumes: !override
-      - /var/lib/docker/volumes:/source:ro
-      - local-metrics:/metrics
-      - local-restic:/restic
-      - restic-cache:/root/.cache/restic
 
 volumes:
   local-metrics:
