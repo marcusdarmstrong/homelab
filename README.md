@@ -164,8 +164,11 @@ Let's Encrypt needs no setup; Traefik registers automatically.
 
 ## Setting up a host
 
-1. Flash 64-bit Raspberry Pi OS Lite. On the Pi 5, boot from the NVMe. Make
-   sure you can `ssh` to it (by default as `<name>.local`; set `HOST_SSH`
+1. Flash 64-bit Raspberry Pi OS Lite onto an SD card with Raspberry Pi
+   Imager, with your user and SSH key, and boot from it. Do this even on a
+   Pi with an NVMe drive: with `HOST_STORAGE=ssd`, `provision.sh` installs
+   onto the NVMe itself, and asks first if the drive isn't blank. Make sure
+   you can `ssh` to it (by default as `<name>.local`; set `HOST_SSH`
    otherwise).
 2. Write `hosts/<name>.env` ([settings](hosts/README.md)), then commit and
    push it: the host reads its settings from git, and CI checks them.

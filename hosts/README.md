@@ -25,7 +25,7 @@ settings file with a secret-looking key (`*_SECRET`, `*_PASSWORD`, `*_TOKEN`,
 | `HOMELAB_DOMAIN` | required | The zone for everything; services that run once live at `<service>.HOMELAB_DOMAIN`. |
 | `TZ` | `UTC` | |
 | `HOST_SSH` | `<name>.local` | How `provision.sh` and `push-env.sh` reach the host. |
-| `HOST_STORAGE` | `ssd` | `ssd` (also NVMe) or `sdcard`; see the README's SD-card section. |
+| `HOST_STORAGE` | `ssd` | `ssd` (an NVMe drive) or `sdcard`; see the README's SD-card section. With `ssd`, `provision.sh` moves a host that booted from its SD card onto the NVMe. |
 | `HOST_DNS` | `"1.1.1.1 1.0.0.1"` | The Pi's own resolvers. Deliberately not Pi-hole, so the host can always pull images and sync git. |
 | `OS_UPGRADE_TIME` | `04:00` | When OS auto-updates run. |
 | `OS_REBOOT_TIME` | `04:30` | When the Pi reboots, if an update needs it. |
