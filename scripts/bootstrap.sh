@@ -3,12 +3,15 @@
 #
 # Idempotent: every step inspects current state and only changes what differs,
 # so re-running is always safe. scripts/sync.sh re-runs it whenever it, its
-# inputs or .env change, so host-level changes deploy like everything else.
+# inputs, the host's settings or its .env change, so host-level changes deploy
+# like everything else.
 #
 # Usually run for you by scripts/provision.sh from your checkout. Directly
 # (as root; works standalone or from a checkout):
-#   bootstrap.sh --repo https://github.com/<you>/homelab.git [--env ./host.env]
+#   bootstrap.sh --repo https://github.com/<you>/homelab.git --env ./host.env
 #                [--branch main] [--dir /opt/homelab]
+# The --env file (HOST_NAME plus secrets) is required on the first run;
+# settings come from hosts/<HOST_NAME>.env in the checkout.
 set -euo pipefail
 
 REPO_URL=""
@@ -124,12 +127,6 @@ Mechanism=zram'; then
   fi
 fi
 
-# Subnet routing for the tailscale profile. (IPv4 only: enabling IPv6
-# forwarding would stop the Pi accepting router advertisements.)
-if write_file /etc/sysctl.d/99-homelab.conf 'net.ipv4.ip_forward = 1'; then
-  sysctl --quiet --system
-fi
-
 install -d /var/lib/homelab/metrics
 
 # ---- repo checkout ---------------------------------------------------------------
@@ -151,25 +148,23 @@ fi
 git config --system --get-all safe.directory 2>/dev/null | grep -qxF "$REPO_DIR" ||
   git config --system --add safe.directory "$REPO_DIR"
 
-# ---- host config (.env) ------------------------------------------------------------
+# ---- host config (.env: HOST_NAME and secrets) ------------------------------------------
 env_ready=1
 if [[ -n "$ENV_SRC" ]]; then
   write_file "$REPO_DIR/.env" "$(cat "$ENV_SRC")" 0600 || true
-elif [[ ! -f "$REPO_DIR/.env" ]]; then
-  install -m 0600 "$REPO_DIR/.env.example" "$REPO_DIR/.env"
-  log "created $REPO_DIR/.env from the example"
 fi
+[[ -f "$REPO_DIR/.env" ]] || die "--env is required on the first run"
 
 cd "$REPO_DIR"
 # shellcheck source=scripts/lib.sh
 source scripts/lib.sh
-load_host_env || die "$REPO_DIR/.env doesn't produce a valid compose config"
+load_host_env || die "hosts/$(local_host_name).env and $REPO_DIR/.env don't produce a valid compose config"
 # apply.sh, run below, picks the env files itself.
 unset COMPOSE_ENV_FILES
-# Placeholders from .env.example mean it isn't filled in.
+# Placeholders from the secrets example mean it isn't filled in.
 [[ -z "$(placeholder_keys)" ]] || env_ready=0
 
-# ---- hostname and host DNS (from .env) ----------------------------------------------
+# ---- hostname and host DNS ----------------------------------------------------------
 if ((env_ready)); then
   host_name="$(env_get HOST_NAME)"
   if [[ -n "$host_name" && "$(hostnamectl --static)" != "$host_name" ]]; then
@@ -293,7 +288,7 @@ if ((env_ready)); then
     log "deploy timer enabled; follow with: journalctl -fu homelab-sync"
   fi
 else
-  log "fill in the placeholders in $REPO_DIR/.env (or pass --env), then re-run to enable deploys"
+  log "fill in the placeholders in your secrets and run scripts/push-env.sh to enable deploys"
 fi
 
 if ((${#reboot_reasons[@]})); then

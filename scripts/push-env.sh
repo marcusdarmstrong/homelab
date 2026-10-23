@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# Push a host's env file from this checkout and deploy it.
+# Push a host's secrets from this checkout and deploy them.
 #
-#   scripts/push-env.sh <name>     uses hosts/<name>.env
+#   scripts/push-env.sh <name>
 #
-# hosts/<name>.env (gitignored) is the source of truth for that host's
-# config. Keep it here, back it up to your password manager, and change it
-# only here: each push overwrites the host's own .env.
+# Settings are committed in hosts/<name>.env and deploy by commit. Secrets
+# aren't: hosts/secrets.env (every host) and hosts/<name>.secrets.env (this
+# one, optional) are gitignored, and this assembles them, with HOST_NAME, into
+# the host's .env. Keep them here, back them up to your password manager, and
+# change them only here: each push overwrites the host's .env.
 #
-# Validates the file, shows which keys differ from the host's copy (no values
-# are printed), installs it and runs a sync, which applies it (host-level
-# settings included) and shows the result. The host must already be
+# Validates the result against the committed host files, shows which keys
+# differ from the host's copy (no values are printed), installs it and runs a
+# sync, which applies it and shows the result. The host must already be
 # provisioned (scripts/provision.sh).
 #
-# Reaches the host at HOST_SSH from the file (default: <name>.local). sudo
-# may prompt for a password.
+# Reaches the host at HOST_SSH from its host file (default: <name>.local).
+# sudo may prompt for a password.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,7 +23,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_DIR/scripts/lib.sh"
 cd "$REPO_DIR"
 
-name="${1:?usage: push-env.sh <name>   (reads hosts/<name>.env)}"
+name="${1:?usage: push-env.sh <name>}"
 load_host_file "$name"
 host_provisioned || die "$name isn't provisioned yet; run scripts/provision.sh $name"
 

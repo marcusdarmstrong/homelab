@@ -1,8 +1,8 @@
-# Host config holds secrets; only the documented examples are tracked.
+# Secrets never go in git. Host settings (hosts/<name>.env) are committed;
+# hosts/secrets.env and hosts/<name>.secrets.env are yours alone, and a host's
+# .env is assembled from them by scripts/push-env.sh.
 .env
-*.env
-!.env.example
-!test/local.env
-!config/*.env
+hosts/secrets.env
+*.secrets.env
 .DS_Store
 test/.local-oidc.env

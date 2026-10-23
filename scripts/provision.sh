@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# Provision a freshly imaged host from its env file in this checkout.
+# Provision a freshly imaged host.
 #
-#   scripts/provision.sh <name>     uses hosts/<name>.env
+#   scripts/provision.sh <name>
+#
+# hosts/<name>.env must already be committed and pushed: the host reads its
+# settings from git. Its .env (HOST_NAME plus your secrets from
+# hosts/secrets.env and hosts/<name>.secrets.env) goes over ssh.
 #
 # Once per image. Copies bootstrap.sh over, which installs Docker, clones this
 # repo's origin, installs the .env and enables the deploy timer, then runs the
 # first deploy and shows the result. After that, commits deploy themselves and
-# config changes go out with scripts/push-env.sh; this refuses a host that's
+# secret changes go out with scripts/push-env.sh; this refuses a host that's
 # already provisioned.
 #
-# Reaches the host at HOST_SSH from the file (default: <name>.local). sudo
-# may prompt for a password.
+# Reaches the host at HOST_SSH from its host file (default: <name>.local).
+# sudo may prompt for a password.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,7 +22,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$REPO_DIR/scripts/lib.sh"
 cd "$REPO_DIR"
 
-name="${1:?usage: provision.sh <name>   (reads hosts/<name>.env)}"
+name="${1:?usage: provision.sh <name>}"
 load_host_file "$name"
 if host_provisioned; then
   die "$name is already provisioned; push config changes with scripts/push-env.sh $name"
