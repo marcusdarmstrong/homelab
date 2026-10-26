@@ -59,6 +59,18 @@ host_config_hash() {
 # shellcheck disable=SC2034  # used by bootstrap.sh and sync.sh
 BOOTSTRAP_STATE="${HOMELAB_STATE_DIR:-/var/lib/homelab}/bootstrapped"
 
+# Reboots that host-level settings need. bootstrap.sh writes why to
+# REBOOT_REQUIRED (the "Reboot pending" alert watches it), and REBOOT_NOW when
+# the deploy should do it: sync.sh reboots once a deploy succeeds. Both are in
+# /run, so a reboot clears them. REBOOTED_FOR records the settings and reasons
+# of the last such reboot, so one that didn't help isn't repeated.
+# shellcheck disable=SC2034  # used by bootstrap.sh and sync.sh
+REBOOT_REQUIRED=/run/homelab/reboot-required
+# shellcheck disable=SC2034
+REBOOT_NOW=/run/homelab/reboot-now
+# shellcheck disable=SC2034
+REBOOTED_FOR="${HOMELAB_STATE_DIR:-/var/lib/homelab}/rebooted-for"
+
 # Keys still holding a placeholder from hosts/secrets.env.example (changeme,
 # changeme-at-least-16-chars, changeme@example.com, <account-id>),
 # space-separated.

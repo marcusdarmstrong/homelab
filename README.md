@@ -179,8 +179,8 @@ Let's Encrypt needs no setup; Traefik registers automatically.
 4. Run `scripts/provision.sh <name>`, once per image. It copies
    `bootstrap.sh` over, which installs Docker, clones this repo over HTTPS,
    installs the host's `.env` and enables the deploy timer; then it runs the
-   first deploy and shows the result. sudo may ask for your password. Reboot
-   if it asks (memory cgroup).
+   first deploy and shows the result. sudo may ask for your password. The
+   Pi then reboots once, to turn on the memory cgroup.
 5. If this is the first `sso` host, set up SSO (below) right away.
 
 Both `provision.sh` and `push-env.sh` refuse to run unless `hosts/<name>.env`
@@ -199,6 +199,13 @@ reaches every host like any other. It:
 - enables OS auto-updates with reboots (see below)
 - sets the hostname and the Pi's own DNS from `HOST_NAME` and `HOST_DNS`
 - clones the repo to `/opt/homelab`, installs `.env`, and enables the timer
+
+When something it changed only takes effect on a reboot (the kernel command
+line, firmware settings, swap), the Pi reboots as soon as that deploy
+succeeds, and `bootstrap.sh` runs again afterwards. If the reboot didn't
+help, it doesn't reboot again for the same reasons and settings, and the
+"Reboot pending" alert fires after two days. `OS_AUTO_REBOOT=false` leaves
+these reboots to you too.
 
 The Pi resolves through fixed upstreams rather than its own Pi-hole, so it can
 still pull images and sync git while Pi-hole restarts, and its containers

@@ -13,6 +13,10 @@
 # Deploy outcome and OS update status are exported as metrics for Alloy's
 # textfile collector, which the "Deploy failing" and OS update alerts watch.
 #
+# When bootstrap.sh changed something that only takes effect on a reboot
+# (kernel command line, firmware settings), the Pi reboots once the deploy
+# succeeds: a minute or two without DNS from this Pi.
+#
 # A tick where nothing changed writes nothing to disk: on SD-card hosts every
 # small write costs several blocks of filesystem journal.
 set -euo pipefail
@@ -44,10 +48,19 @@ on_exit() {
   write_metric deploy.prom "homelab_deploy_success $((rc == 0))"
   # OS auto-update status, piggybacking on this every-minute timer.
   local reboot=0 upgrade_failed=0
-  [[ -f /var/run/reboot-required ]] && reboot=1
+  [[ -f /var/run/reboot-required || -f "$REBOOT_REQUIRED" ]] && reboot=1
   systemctl is-failed --quiet apt-daily-upgrade.service && upgrade_failed=1
   write_metric os.prom "homelab_os_reboot_required $reboot
 homelab_os_upgrade_failed $upgrade_failed"
+
+  # Host settings that bootstrap.sh says need a reboot, once the deploy is
+  # done. After the reboot bootstrap.sh runs again, to check it worked.
+  if ((rc == 0)) && [[ -f "$REBOOT_NOW" ]]; then
+    rm -f "$REBOOT_NOW" "$BOOTSTRAP_STATE"
+    log "rebooting for: $(cat "$REBOOT_REQUIRED" 2>/dev/null)"
+    # Delayed, so this run can finish and release the deploy lock.
+    systemd-run --quiet --on-active=15 systemctl reboot
+  fi
 }
 trap on_exit EXIT
 

@@ -272,6 +272,32 @@ Environment=HOMELAB_BRANCH=$BRANCH" && units_changed=1
 fi
 ((units_changed)) && systemctl daemon-reload
 
+# ---- reboot ------------------------------------------------------------------------
+# Settings above that only take effect on a reboot: the next deploy to
+# succeed reboots (sync.sh), unless OS_AUTO_REBOOT is off or this same reboot,
+# with these same settings, already happened and didn't help. After a deploy
+# reboots, this script runs again and finds nothing left to reboot for.
+install -d "$(dirname "$REBOOT_REQUIRED")"
+if ((${#reboot_reasons[@]})); then
+  printf -v reasons '%s, ' "${reboot_reasons[@]}"
+  reasons="${reasons%, }"
+  printf '%s\n' "$reasons" >"$REBOOT_REQUIRED"
+  rebooted_for="$(host_config_hash) $reasons"
+  if [[ "$(env_get OS_AUTO_REBOOT)" == false ]]; then
+    rm -f "$REBOOT_NOW"
+    log "reboot required: $reasons (OS_AUTO_REBOOT is off, so reboot by hand)"
+  elif [[ "$(cat "$REBOOTED_FOR" 2>/dev/null)" == "$rebooted_for" ]]; then
+    rm -f "$REBOOT_NOW"
+    log "warning: still needs a reboot for $reasons, though it just rebooted for that; not rebooting again"
+  else
+    printf '%s\n' "$rebooted_for" >"$REBOOTED_FOR"
+    touch "$REBOOT_NOW"
+    log "reboot required: $reasons; the deploy reboots once it succeeds"
+  fi
+else
+  rm -f "$REBOOT_REQUIRED" "$REBOOT_NOW" "$REBOOTED_FOR"
+fi
+
 # Deploying with placeholder values would request certificates with fake
 # credentials, so hold off until .env has been filled in.
 if ((env_ready)); then
@@ -289,10 +315,5 @@ if ((env_ready)); then
   fi
 else
   log "fill in the placeholders in your secrets and run scripts/push-env.sh to enable deploys"
-fi
-
-if ((${#reboot_reasons[@]})); then
-  printf -v reasons '%s, ' "${reboot_reasons[@]}"
-  log "reboot required: ${reasons%, }"
 fi
 log "done"

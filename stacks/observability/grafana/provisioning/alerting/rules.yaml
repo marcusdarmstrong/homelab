@@ -644,7 +644,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $labels.host }}: updates have been waiting on a reboot for 2 days (is OS_AUTO_REBOOT off?)"
+            "summary": "{{ $labels.host }}: updates or settings have been waiting on a reboot for 2 days (is OS_AUTO_REBOOT off, or did a reboot not help? see journalctl -u homelab-sync)"
           },
           "data": [
             {
