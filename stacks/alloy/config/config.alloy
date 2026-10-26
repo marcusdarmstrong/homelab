@@ -15,6 +15,10 @@ prometheus.exporter.unix "host" {
 	// Disk metadata (model, serial) from the host's udev database.
 	udev_data_path = "/host/root/run/udev/data"
 
+	// Network counters come from Alloy's own network namespace here: see
+	// "network" below.
+	disable_collectors = ["netdev"]
+
 	filesystem {
 		mount_points_exclude = "^/(dev|proc|run|sys|var/lib/docker/.+)($|/)"
 		fs_types_exclude     = "^(autofs|binfmt_misc|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|pstore|securityfs|squashfs|sysfs|tmpfs|tracefs)$"
@@ -37,6 +41,30 @@ discovery.relabel "node" {
 
 prometheus.scrape "host" {
 	targets    = discovery.relabel.node.output
+	forward_to = [prometheus.relabel.keep.receiver]
+}
+
+// The host's network interfaces. /proc/net is whichever namespace reads
+// it, so through /host/proc it would show Alloy's container interfaces;
+// PID 1's view (Alloy shares the host's PIDs) is the host's.
+prometheus.exporter.unix "network" {
+	procfs_path    = "/host/proc/1"
+	sysfs_path     = "/host/sys"
+	rootfs_path    = "/host/root"
+	set_collectors = ["netdev"]
+}
+
+discovery.relabel "network" {
+	targets = prometheus.exporter.unix.network.targets
+
+	rule {
+		target_label = "job"
+		replacement  = "network"
+	}
+}
+
+prometheus.scrape "network" {
+	targets    = discovery.relabel.network.output
 	forward_to = [prometheus.relabel.keep.receiver]
 }
 
@@ -191,7 +219,7 @@ prometheus.relabel "keep" {
 			"node;node_(cpu_seconds_total|thermal_zone_temp|pressure_.+|vmstat_pswp(in|out))",
 			"node;node_memory_(MemAvailable|MemTotal|SwapTotal|SwapFree)_bytes",
 			"node;node_(filesystem_(avail|size)_bytes|disk_(read|written)_bytes_total|disk_io_time_seconds_total)",
-			"node;node_network_(receive|transmit)_bytes_total",
+			"network;node_network_(receive|transmit)_bytes_total",
 			// Fans, PoE current, undervoltage and NVMe temperature, plus the
 			// chip names that tell them apart.
 			"node;node_cooling_device_(cur|max)_state",
