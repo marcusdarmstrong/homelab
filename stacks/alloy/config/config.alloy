@@ -192,7 +192,11 @@ prometheus.relabel "keep" {
 			"node;node_memory_(MemAvailable|MemTotal|SwapTotal|SwapFree)_bytes",
 			"node;node_(filesystem_(avail|size)_bytes|disk_(read|written)_bytes_total|disk_io_time_seconds_total)",
 			"node;node_network_(receive|transmit)_bytes_total",
-			"cadvisor;container_(cpu_usage_seconds_total|memory_working_set_bytes)",
+			// Fans, PoE current, undervoltage and NVMe temperature, plus the
+			// chip names that tell them apart.
+			"node;node_cooling_device_(cur|max)_state",
+			"node;node_hwmon_(chip_names|temp_celsius|pwm|fan_rpm|curr_amps|in_lcrit_alarm_volts)",
+			"cadvisor;container_(cpu_usage_seconds_total|memory_working_set_bytes|fs_writes_bytes_total)",
 			"wan;probe_(success|duration_seconds)",
 			"traefik;traefik_(tls_certs_not_after|service_requests_total|service_request_duration_seconds_(sum|count))",
 			"(smartctl-exporter|unpoller);.+",

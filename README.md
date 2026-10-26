@@ -68,8 +68,8 @@ household device uses depends on the other site or on Tailscale.
   metrics for any container with a `homelab.metrics.port` label.
 - **Alerting**: Grafana alert rules (`provisioning/alerting/`) notify through
   ntfy, which phones reach from anywhere: hosts down, disk, memory,
-  temperature, scrape targets, deploys, backups, cert expiry, WAN, SMART and
-  OS updates. healthchecks.io notices if the monitoring host itself goes
+  temperature, undervoltage, scrape targets, deploys, backups, cert expiry,
+  WAN, SMART and OS updates. healthchecks.io notices if the monitoring host itself goes
   quiet.
 - **OS updates**: unattended-upgrades applies everything from the Debian,
   Raspberry Pi and Docker repos daily, and reboots in a set window when a
@@ -306,11 +306,12 @@ Grafana save their state every few minutes instead of every minute. Each
 setting is explained in the file; a host's own settings override it.
 
 Raspberry Pi OS already mounts `/` with `noatime`, keeps `/tmp` in RAM and
-the journal volatile. The "Disk write rate high" alert fires if a disk
-averages over 2 GB/day for six hours. To see who is writing,
-`rate(node_disk_written_bytes_total[1h])` in Prometheus gives the total, and
-each container's `io.stat` under `/sys/fs/cgroup/system.slice/docker-*.scope/`
-gives the split.
+the journal volatile. The "SD card write rate high" alert fires if a card
+averages over 2 GB/day for six hours. The dashboard's Disk section shows
+each disk's writes per day and which containers they come from.
+NVMe drives aren't held to that: a few GB a day is nothing against their
+rated endurance, so the `smart` profile watches their wear instead ("Disk
+wearing out").
 
 ### Tailscale
 

@@ -683,7 +683,7 @@
         },
         {
           "uid": "disk-writes-high",
-          "title": "Disk write rate high",
+          "title": "SD card write rate high",
           "condition": "C",
           "for": "1h",
           "noDataState": "OK",
@@ -692,7 +692,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $labels.host }}: {{ $labels.device }} is averaging {{ $values.A.Value | printf \"%.1f\" }} GB/day of writes (SD cards wear out; see README \u2192 SD-card hosts)"
+            "summary": "{{ $labels.host }}: {{ $labels.device }} is averaging {{ $values.A.Value | printf \"%.1f\" }} GB/day of writes; SD cards wear out (see README \u2192 SD-card hosts)"
           },
           "data": [
             {
@@ -705,7 +705,7 @@
               "model": {
                 "refId": "A",
                 "instant": true,
-                "expr": "max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+|nvme[0-9]+n[0-9]+|sd[a-z]+\"}[6h])) * 86400 / 1e9"
+                "expr": "max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[6h])) * 86400 / 1e9"
               }
             },
             {
@@ -721,6 +721,54 @@
                       "type": "gt",
                       "params": [
                         2
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "undervoltage",
+          "title": "Undervoltage",
+          "condition": "C",
+          "for": "1m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.host }}: its supply voltage dropped too low in the last 10 minutes; the Pi throttles, and writes can corrupt. Check the power supply or PoE switch port"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "expr": "max by (host) (max_over_time(node_hwmon_in_lcrit_alarm_volts[10m]))",
+                "instant": true
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
                       ]
                     }
                   }
