@@ -196,6 +196,7 @@ reaches every host like any other. It:
 
 - installs Docker from Docker's apt repo, with log rotation and `live-restore`
 - enables the memory cgroup and zram-only swap
+- sets a PoE HAT's fan curve from `POE_FAN_TEMPS` and `POE_FAN_HYST`
 - enables OS auto-updates with reboots (see below)
 - sets the hostname and the Pi's own DNS from `HOST_NAME` and `HOST_DNS`
 - clones the repo to `/opt/homelab`, installs `.env`, and enables the timer

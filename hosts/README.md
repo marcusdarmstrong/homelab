@@ -30,6 +30,8 @@ settings file with a secret-looking key (`*_SECRET`, `*_PASSWORD`, `*_TOKEN`,
 | `OS_UPGRADE_TIME` | `04:00` | When OS auto-updates run. |
 | `OS_REBOOT_TIME` | `04:30` | When the Pi reboots, if an update needs it. |
 | `OS_AUTO_REBOOT` | `true` | `false` to reboot by hand, both for OS updates and for settings that need a reboot. |
+| `POE_FAN_TEMPS` | firmware's `40,45,50,55` | The four temperatures (°C) at which a PoE HAT's fan steps up a speed (12%, 25%, 50%, full). Changing it reboots the host. |
+| `POE_FAN_HYST` | `2` | How far (°C) below each of those the Pi must cool before the fan steps back down. |
 | `DOCKER_SUBNET` | `172.30.0.0/24` | The project network; change only if it collides. |
 | `DOCKER_LOG_DRIVER` | `local` | `journald` on SD cards (`config/sdcard.env`). |
 | `ACME_DNS_PROVIDER` | `cloudflare` | Any [lego DNS provider](https://go-acme.github.io/lego/dns/), with its variables added to Traefik. |

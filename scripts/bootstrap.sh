@@ -198,6 +198,46 @@ if ((env_ready)); then
   getent hosts github.com >/dev/null || log "warning: DNS lookups are failing after the DNS change"
 fi
 
+# ---- PoE HAT fan --------------------------------------------------------------------
+# POE_FAN_TEMPS: the four temperatures (°C) at which a PoE HAT's fan steps up
+# a speed (to 12%, 25%, 50% and full); POE_FAN_HYST: how far (°C) below each
+# it has to cool before stepping back down. The firmware's defaults
+# (40,45,50,55 and 2) put a step right where an idle Pi 4 runs, so the fan
+# keeps changing speed. The firmware reads these at boot.
+config_txt=/boot/firmware/config.txt
+[[ -f $config_txt ]] || config_txt=/boot/config.txt
+fan_temps="$(env_get POE_FAN_TEMPS)"
+fan_hyst="$(env_get POE_FAN_HYST)"
+fan_block=""
+if [[ -n "$fan_temps" ]]; then
+  IFS=, read -ra temps <<<"$fan_temps"
+  [[ ${#temps[@]} -eq 4 && "${fan_hyst:=2}" =~ ^[0-9]+$ ]] ||
+    die "POE_FAN_TEMPS must be four temperatures like 40,45,55,60, and POE_FAN_HYST a number"
+  fan_block="# BEGIN homelab: POE_FAN_TEMPS and POE_FAN_HYST, written by scripts/bootstrap.sh
+[all]
+# Ends the last overlay's parameters, so these reach the PoE HAT's.
+dtoverlay="
+  prev=0
+  for i in 0 1 2 3; do
+    if [[ ! "${temps[i]}" =~ ^[0-9]+$ ]] || ((temps[i] <= prev)); then
+      die "POE_FAN_TEMPS must be four rising temperatures in °C, like 40,45,55,60"
+    fi
+    prev="${temps[i]}"
+    fan_block+=$'\n'"dtparam=poe_fan_temp$i=${temps[i]}000,poe_fan_temp${i}_hyst=${fan_hyst}000"
+  done
+  fan_block+=$'\n# END homelab'
+fi
+if [[ -f $config_txt ]]; then
+  # config.txt is on the FAT boot partition, so it's written in place rather
+  # than with write_file, which sets a mode.
+  config="$(sed '/^# BEGIN homelab/,/^# END homelab/d' "$config_txt")${fan_block:+$'\n'$fan_block}"
+  if [[ "$(cat "$config_txt")" != "$config" ]]; then
+    printf '%s\n' "$config" >"$config_txt"
+    log "updated the PoE fan settings in $config_txt"
+    reboot_reasons+=("PoE fan curve")
+  fi
+fi
+
 # ---- OS auto-updates ------------------------------------------------------------------
 # Everything from Debian, Raspberry Pi (kernel, firmware, bootloader) and
 # Docker, not just Debian security. Runs at OS_UPGRADE_TIME, after the 03:30
