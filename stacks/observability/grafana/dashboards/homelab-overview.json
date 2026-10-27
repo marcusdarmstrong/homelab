@@ -392,7 +392,7 @@
       "gridPos": {
         "x": 12,
         "y": 1,
-        "w": 4,
+        "w": 3,
         "h": 4
       },
       "fieldConfig": {
@@ -453,7 +453,7 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 16,
+        "x": 15,
         "y": 1,
         "w": 3,
         "h": 4
@@ -532,7 +532,7 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 19,
+        "x": 18,
         "y": 1,
         "w": 3,
         "h": 4
@@ -611,9 +611,9 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 22,
+        "x": 21,
         "y": 1,
-        "w": 2,
+        "w": 3,
         "h": 4
       },
       "fieldConfig": {
