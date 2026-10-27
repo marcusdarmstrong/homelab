@@ -26,7 +26,7 @@ household device uses depends on the other site or on Tailscale.
 |-----------------|---------------------------------------------|----------------------|
 | _(always)_      | Traefik, tinyauth, Tailscale, Alloy, DNS records, Docker API proxy | every host |
 | `sso`           | Pocket ID, with its backups                 | exactly one host     |
-| `observability` | Prometheus, Loki, Grafana (and its image renderer), ntfy | exactly one host |
+| `observability` | Prometheus, Loki, Grafana, ntfy             | exactly one host     |
 | `dns`           | Pi-hole                                     | any number of hosts  |
 | `unifi`         | UnPoller (that site's UniFi metrics)        | one host per site    |
 | `smart`         | smartctl_exporter (NVMe/disk health)        | hosts with such a disk |
