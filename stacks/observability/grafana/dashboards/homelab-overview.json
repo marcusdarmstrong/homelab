@@ -305,7 +305,7 @@
     {
       "id": 5,
       "type": "stat",
-      "title": "Reboot pending",
+      "title": "Reboot",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -392,12 +392,12 @@
       "gridPos": {
         "x": 12,
         "y": 1,
-        "w": 3,
+        "w": 4,
         "h": 4
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "dtdurations",
+          "unit": "s",
           "mappings": [],
           "color": {
             "mode": "thresholds"
@@ -410,7 +410,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "decimals": 0
         },
         "overrides": []
       },
@@ -452,7 +453,7 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 15,
+        "x": 16,
         "y": 1,
         "w": 3,
         "h": 4
@@ -525,13 +526,13 @@
     {
       "id": 8,
       "type": "stat",
-      "title": "Undervoltage (24h)",
+      "title": "Voltage",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 18,
+        "x": 19,
         "y": 1,
         "w": 3,
         "h": 4
@@ -544,12 +545,12 @@
               "type": "value",
               "options": {
                 "0": {
-                  "text": "None",
+                  "text": "OK",
                   "color": "green",
                   "index": 0
                 },
                 "1": {
-                  "text": "Seen",
+                  "text": "Dropped",
                   "color": "red",
                   "index": 1
                 }
@@ -599,7 +600,7 @@
           "range": false
         }
       ],
-      "description": "The Pi's supply dropped below what it needs at some point in the last day: check the power supply or PoE port."
+      "description": "Undervoltage in the last 24 hours: the Pi's supply dropped below what it needs at some point in the last day: check the power supply or PoE port."
     },
     {
       "id": 9,
@@ -610,9 +611,9 @@
         "uid": "prometheus"
       },
       "gridPos": {
-        "x": 21,
+        "x": 22,
         "y": 1,
-        "w": 3,
+        "w": 2,
         "h": 4
       },
       "fieldConfig": {
@@ -680,7 +681,7 @@
         "x": 0,
         "y": 5,
         "w": 24,
-        "h": 5
+        "h": 4
       },
       "options": {
         "viewMode": "list",
@@ -708,7 +709,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 10,
+        "y": 9,
         "w": 24,
         "h": 1
       },
@@ -724,7 +725,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 11,
+        "y": 10,
         "w": 12,
         "h": 8
       },
@@ -789,7 +790,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 11,
+        "y": 10,
         "w": 12,
         "h": 8
       },
@@ -841,7 +842,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 19,
+        "y": 18,
         "w": 8,
         "h": 7
       },
@@ -893,7 +894,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 19,
+        "y": 18,
         "w": 8,
         "h": 7
       },
@@ -942,7 +943,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 19,
+        "y": 18,
         "w": 8,
         "h": 7
       },
@@ -989,7 +990,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 25,
         "w": 24,
         "h": 1
       },
@@ -1005,7 +1006,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 27,
+        "y": 26,
         "w": 12,
         "h": 8
       },
@@ -1086,7 +1087,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 27,
+        "y": 26,
         "w": 12,
         "h": 8
       },
@@ -1109,8 +1110,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1140,7 +1147,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 35,
+        "y": 34,
         "w": 12,
         "h": 7
       },
@@ -1190,7 +1197,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 35,
+        "y": 34,
         "w": 12,
         "h": 7
       },
@@ -1254,7 +1261,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 42,
+        "y": 41,
         "w": 24,
         "h": 1
       },
@@ -1270,7 +1277,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 43,
+        "y": 42,
         "w": 8,
         "h": 7
       },
@@ -1320,7 +1327,7 @@
       },
       "gridPos": {
         "x": 8,
-        "y": 43,
+        "y": 42,
         "w": 8,
         "h": 7
       },
@@ -1370,7 +1377,7 @@
       },
       "gridPos": {
         "x": 16,
-        "y": 43,
+        "y": 42,
         "w": 8,
         "h": 7
       },
@@ -1417,7 +1424,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 50,
+        "y": 49,
         "w": 24,
         "h": 1
       },
@@ -1433,7 +1440,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 50,
         "w": 12,
         "h": 8
       },
@@ -1464,8 +1471,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1504,7 +1517,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 51,
+        "y": 50,
         "w": 12,
         "h": 8
       },
@@ -1551,7 +1564,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 59,
+        "y": 58,
         "w": 24,
         "h": 1
       },
@@ -1567,7 +1580,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 59,
         "w": 12,
         "h": 8
       },
@@ -1586,8 +1599,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1617,7 +1636,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 60,
+        "y": 59,
         "w": 12,
         "h": 8
       },
@@ -1636,8 +1655,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1663,7 +1688,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 68,
+        "y": 67,
         "w": 24,
         "h": 1
       },
@@ -1679,7 +1704,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 69,
+        "y": 68,
         "w": 12,
         "h": 8
       },
@@ -1698,8 +1723,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1728,7 +1759,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 69,
+        "y": 68,
         "w": 12,
         "h": 8
       },
@@ -1747,8 +1778,14 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "sortBy": "Mean",
+          "sortDesc": true
         },
         "tooltip": {
           "mode": "multi",
@@ -1774,7 +1811,7 @@
       "collapsed": false,
       "gridPos": {
         "x": 0,
-        "y": 77,
+        "y": 76,
         "w": 24,
         "h": 1
       },
@@ -1790,7 +1827,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 78,
+        "y": 77,
         "w": 24,
         "h": 14
       },
