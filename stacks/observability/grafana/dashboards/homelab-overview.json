@@ -428,7 +428,11 @@
         "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto",
-        "wideLayout": true
+        "wideLayout": true,
+        "text": {
+          "titleSize": 22,
+          "valueSize": 28
+        }
       },
       "targets": [
         {
