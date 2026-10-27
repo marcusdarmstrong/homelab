@@ -24,7 +24,7 @@ placeholders="$(placeholder_keys)"
 declare -A required_by_profile=(
   [always]="CF_DNS_API_TOKEN TS_AUTHKEY"
   [sso]="POCKET_ID_ENCRYPTION_KEY RESTIC_REPOSITORY_PREFIX RESTIC_PASSWORD"
-  [observability]="NTFY_GRAFANA_TOKEN NTFY_GRAFANA_PASSWORD_HASH NTFY_PHONE_PASSWORD_HASH"
+  [observability]="NTFY_GRAFANA_TOKEN NTFY_GRAFANA_PASSWORD_HASH NTFY_PHONE_PASSWORD_HASH GRAFANA_RENDERER_TOKEN"
   [unifi]="UNIFI_URL UNIFI_API_KEY"
 )
 # Only obtainable after the first deploy (they come from Pocket ID), so

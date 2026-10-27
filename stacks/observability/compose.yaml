@@ -100,6 +100,11 @@ services:
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: contains(groups[*], 'admins') && 'Admin' || 'Viewer'
       # Read by provisioning/alerting/contact-points.yaml.
       NTFY_GRAFANA_TOKEN: ${NTFY_GRAFANA_TOKEN:-}
+      # PNGs of dashboards and panels (gcx dashboards snapshot, the share
+      # menu's image links), drawn by grafana-image-renderer below.
+      GF_RENDERING_SERVER_URL: http://grafana-image-renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+      GF_RENDERING_RENDERER_TOKEN: ${GRAFANA_RENDERER_TOKEN:-}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
@@ -110,6 +115,26 @@ services:
       - traefik.http.services.grafana.loadbalancer.server.port=3000
       - homelab.metrics.port=3000
       - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_GRAFANA:-}
+
+  # Headless Chromium that draws dashboards for Grafana's render API. Only
+  # containers on the project network reach it (no Traefik route), and only
+  # with the token it shares with Grafana, which refuses to start without one.
+  grafana-image-renderer:
+    image: grafana/grafana-image-renderer:v5.12.6
+    restart: unless-stopped
+    profiles: [observability]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      AUTH_TOKEN: ${GRAFANA_RENDERER_TOKEN:-}
+      # Room for a whole dashboard in one image.
+      BROWSER_MAX_HEIGHT: "6000"
+      # Go's share of the limit below; Chromium needs the rest.
+      GOMEMLIMIT: 256MiB
+    mem_limit: 2g
+    # Chromium's profile and cache, which are scratch.
+    tmpfs:
+      - /tmp:size=512m,mode=1777
 
   # Push notifications for Grafana alerts. Phones subscribe to the
   # `homelab-alerts` topic at https://ntfy.HOMELAB_DOMAIN as user `phone`,
