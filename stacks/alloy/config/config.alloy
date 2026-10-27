@@ -15,9 +15,13 @@ prometheus.exporter.unix "host" {
 	// Disk metadata (model, serial) from the host's udev database.
 	udev_data_path = "/host/root/run/udev/data"
 
-	// Network counters come from Alloy's own network namespace here: see
-	// "network" below.
-	disable_collectors = ["netdev"]
+	// Only the collectors behind metrics that "keep" below lets through.
+	// Network counters would come from Alloy's own network namespace here:
+	// see "network" below.
+	set_collectors = [
+		"cpu", "diskstats", "filesystem", "hwmon", "loadavg", "meminfo", "pressure",
+		"stat", "textfile", "thermal_zone", "uname", "vmstat",
+	]
 
 	filesystem {
 		mount_points_exclude = "^/(dev|proc|run|sys|var/lib/docker/.+)($|/)"
@@ -75,6 +79,12 @@ prometheus.exporter.cadvisor "containers" {
 	containerd_host  = "/host/root/run/containerd/containerd.sock"
 	docker_only      = true
 	storage_duration = "5m"
+
+	// cAdvisor refreshes every container every few seconds (Alloy doesn't
+	// expose the interval), so collect only what "keep" below lets through,
+	// without a label per Docker label: about 40% less CPU.
+	enabled_metrics        = ["cpu", "memory", "diskIO"]
+	store_container_labels = false
 }
 
 discovery.relabel "cadvisor" {
@@ -284,6 +294,14 @@ loki.source.docker "containers" {
 
 loki.relabel "journal" {
 	forward_to = []
+
+	// With the journald log driver (SD-card hosts), container logs are in the
+	// journal too; loki.source.docker already sends them.
+	rule {
+		source_labels = ["__journal_container_name"]
+		regex         = ".+"
+		action        = "drop"
+	}
 
 	rule {
 		source_labels = ["__journal__systemd_unit"]
