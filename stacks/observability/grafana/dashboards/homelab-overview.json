@@ -1079,7 +1079,7 @@
           "legendFormat": "{{host}} {{device}}"
         }
       ],
-      "description": "Write rate over the last hour, as a daily total. The dashed line is the SD-card budget where \"SD card write rate high\" fires; NVMe drives are judged by SSD wear instead."
+      "description": "Write rate over the last hour, as a daily total. The dashed line is the SD-card write budget (2 GB/day) that \"SD card write budget\" and \"SD card wearing fast\" alert on; NVMe drives are judged by SSD wear instead."
     },
     {
       "id": 19,

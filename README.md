@@ -306,9 +306,22 @@ Grafana save their state every few minutes instead of every minute. Each
 setting is explained in the file; a host's own settings override it.
 
 Raspberry Pi OS already mounts `/` with `noatime`, keeps `/tmp` in RAM and
-the journal volatile. The "SD card write rate high" alert fires if a card
-averages over 2 GB/day for six hours. The dashboard's Disk section shows
-each disk's writes per day and which containers they come from.
+the journal volatile.
+
+Each card gets a write budget of 2 GB/day, and the alerts watch how fast
+it's being spent, as in the SRE workbook's
+[multiwindow, multi-burn-rate alerts](https://sre.google/workbook/alerting-on-slos/#6-multiwindow-multi-burn-rate-alerts):
+
+| Alert | Fires when the card writes | over the last | and the last |
+|---|---|---|---|
+| SD card wearing fast (critical) | 14.4× budget (28.8 GB/day) | hour | 5 minutes |
+| SD card wearing fast (critical) | 6× budget (12 GB/day) | 6 hours | 30 minutes |
+| SD card write budget (warning) | over budget | 3 days | 6 hours |
+
+The long window ignores bursts: a morning of apt updates writes about half a
+GB, which once tripped a plain six-hour average. The short window clears the
+alert soon after the writing stops. The dashboard's Disk section shows each
+disk's writes per day and which containers they come from.
 NVMe drives aren't held to that: a few GB a day is nothing against their
 rated endurance, so the `smart` profile watches their wear instead ("Disk
 wearing out").

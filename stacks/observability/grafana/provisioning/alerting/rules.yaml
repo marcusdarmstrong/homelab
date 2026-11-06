@@ -682,17 +682,17 @@
           ]
         },
         {
-          "uid": "disk-writes-high",
-          "title": "SD card write rate high",
+          "uid": "sd-writes-fast",
+          "title": "SD card wearing fast",
           "condition": "C",
-          "for": "1h",
+          "for": "0s",
           "noDataState": "OK",
           "execErrState": "Error",
           "labels": {
-            "severity": "warning"
+            "severity": "critical"
           },
           "annotations": {
-            "summary": "{{ $labels.host }}: {{ $labels.device }} is averaging {{ $values.A.Value | printf \"%.1f\" }} GB/day of writes; SD cards wear out (see README \u2192 SD-card hosts)"
+            "summary": "{{ $labels.host }}: {{ $labels.device }} is writing {{ $values.A.Value | printf \"%.0f\" }} GB/day, several times its 2 GB/day budget; the dashboard's Disk section shows which container (see README \u2192 SD-card hosts)"
           },
           "data": [
             {
@@ -705,7 +705,7 @@
               "model": {
                 "refId": "A",
                 "instant": true,
-                "expr": "max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[6h])) * 86400 / 1e9"
+                "expr": "(max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[1h])) * 86400 / 1e9 > 28.8 and max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[5m])) * 86400 / 1e9 > 28.8) or (max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[6h])) * 86400 / 1e9 > 12 and max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[30m])) * 86400 / 1e9 > 12)"
               }
             },
             {
@@ -720,7 +720,55 @@
                     "evaluator": {
                       "type": "gt",
                       "params": [
-                        2
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "disk-writes-high",
+          "title": "SD card write budget",
+          "condition": "C",
+          "for": "0s",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.host }}: {{ $labels.device }} has averaged {{ $values.A.Value | printf \"%.1f\" }} GB/day of writes for 3 days, over its 2 GB/day budget; SD cards wear out (see README \u2192 SD-card hosts)"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 259200,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "instant": true,
+                "expr": "max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[3d])) * 86400 / 1e9 > 2 and max by (host, device) (rate(node_disk_written_bytes_total{device=~\"mmcblk[0-9]+\"}[6h])) * 86400 / 1e9 > 2"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
                       ]
                     }
                   }

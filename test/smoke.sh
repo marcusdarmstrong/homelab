@@ -105,7 +105,7 @@ check "public entrypoint serves ntfy" test "$(PORT_=8443 status "ntfy.$Z")" = 20
 check "public entrypoint serves nothing else" test "$(PORT_=8443 status "grafana.$Z")" = 404
 
 section "Metrics and logs (pushed through Traefik)"
-expected_jobs="alloy cadvisor grafana loki node ntfy pocket-id prometheus smartctl-exporter traefik unpoller wan"
+expected_jobs="alloy cadvisor grafana loki network node ntfy pocket-id prometheus smartctl-exporter traefik unpoller wan"
 jobs_up() { [[ "$(promql 'count by (job) (up == 1)' | json '" ".join(sorted(r["metric"]["job"] for r in d["data"]["result"]))')" == *"$expected_jobs"* ]]; }
 if wait_for 120 jobs_up; then pass "scrape jobs up: $expected_jobs"; else
   fail "scrape jobs up (have: $(promql 'count by (job) (up == 1)' | json '" ".join(sorted(r["metric"]["job"] for r in d["data"]["result"]))'))"
@@ -123,8 +123,8 @@ for uid in prometheus loki; do
   check "datasource $uid healthy" test "$(grafana "/api/datasources/uid/$uid/health" | json 'd["status"]')" = OK
 done
 check "overview dashboard provisioned" test "$(grafana '/api/search?type=dash-db' | json 'len(d)')" -ge 1
-rules_ok() { [[ "$(grafana /api/prometheus/grafana/api/v1/rules | json 'sum(r["health"]=="ok" for g in d["data"]["groups"] for r in g["rules"])')" -ge 15 ]]; }
-check "15 alert rules evaluating" wait_for 120 rules_ok
+rules_ok() { [[ "$(grafana /api/prometheus/grafana/api/v1/rules | json 'sum(r["health"]=="ok" for g in d["data"]["groups"] for r in g["rules"])')" -ge 17 ]]; }
+check "17 alert rules evaluating" wait_for 120 rules_ok
 # Annotation templates are only rendered at evaluation time, so a broken one
 # shows up in the logs rather than in rule health.
 check "alert templates render" test "$(docker compose logs grafana --since 2m 2>&1 | grep -c 'Error in expanding template')" = 0
