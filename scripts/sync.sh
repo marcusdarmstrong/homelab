@@ -67,6 +67,17 @@ trap on_exit EXIT
 cd "$REPO_DIR"
 [[ -f .env ]] || die "missing $REPO_DIR/.env"
 
+# A Docker upgrade replaces the daemon's socket, but docker-proxy (which
+# live-restore keeps running) still has the old one mounted, so Traefik,
+# Alloy and tinyauth get 503s from it. Restarting it mounts the new one.
+proxy="$(docker ps -q --filter "label=com.docker.compose.project=homelab" \
+           --filter "label=com.docker.compose.service=docker-proxy")"
+if [[ -n "$proxy" ]] &&
+   (($(stat -c %Z /var/run/docker.sock) > $(date -d "$(docker inspect -f '{{.State.StartedAt}}' "$proxy")" +%s))); then
+  log "docker.sock was replaced since docker-proxy started; restarting it"
+  docker restart "$proxy" >/dev/null
+fi
+
 # ls-remote writes nothing locally, unlike fetch (FETCH_HEAD), so only fetch
 # when the branch has moved.
 remote="$(git ls-remote origin "refs/heads/$HOMELAB_BRANCH" | cut -f1)"
