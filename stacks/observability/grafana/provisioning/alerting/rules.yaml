@@ -778,6 +778,102 @@
           ]
         },
         {
+          "uid": "ingest-errors-fast",
+          "title": "Pushes rejected",
+          "condition": "C",
+          "for": "0s",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "critical"
+          },
+          "annotations": {
+            "summary": "{{ $labels.service }} is rejecting {{ humanizePercentage $values.A.Value }} of what the hosts push; the sending host's Alloy logs the reason (journalctl | grep non-recoverable)"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 21600,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "instant": true,
+                "expr": "label_replace((sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[1h])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[1h])) > 0.144 and sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[5m])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[5m])) > 0.144) or (sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[6h])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[6h])) > 0.06 and sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[30m])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[30m])) > 0.06), \"service\", \"$1\", \"service\", \"(.+)@docker\")"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "ingest-errors-budget",
+          "title": "Push error budget",
+          "condition": "C",
+          "for": "0s",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.service }} has rejected {{ humanizePercentage $values.A.Value }} of what the hosts pushed over 3 days, over its 1% budget; the sending host's Alloy logs the reason (journalctl | grep non-recoverable)"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 259200,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "instant": true,
+                "expr": "label_replace(sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[3d])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[3d])) > 0.01 and sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[6h])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[6h])) > 0.01, \"service\", \"$1\", \"service\", \"(.+)@docker\")"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
           "uid": "undervoltage",
           "title": "Undervoltage",
           "condition": "C",

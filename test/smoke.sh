@@ -123,8 +123,8 @@ for uid in prometheus loki; do
   check "datasource $uid healthy" test "$(grafana "/api/datasources/uid/$uid/health" | json 'd["status"]')" = OK
 done
 check "overview dashboard provisioned" test "$(grafana '/api/search?type=dash-db' | json 'len(d)')" -ge 1
-rules_ok() { [[ "$(grafana /api/prometheus/grafana/api/v1/rules | json 'sum(r["health"]=="ok" for g in d["data"]["groups"] for r in g["rules"])')" -ge 17 ]]; }
-check "17 alert rules evaluating" wait_for 120 rules_ok
+rules_ok() { [[ "$(grafana /api/prometheus/grafana/api/v1/rules | json 'sum(r["health"]=="ok" for g in d["data"]["groups"] for r in g["rules"])')" -ge 19 ]]; }
+check "19 alert rules evaluating" wait_for 120 rules_ok
 # Annotation templates are only rendered at evaluation time, so a broken one
 # shows up in the logs rather than in rule health.
 check "alert templates render" test "$(docker compose logs grafana --since 2m 2>&1 | grep -c 'Error in expanding template')" = 0
