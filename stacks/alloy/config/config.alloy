@@ -216,7 +216,7 @@ prometheus.scrape "labelled" {
 // is unwell; everything else is dropped before it reaches Prometheus. The
 // services' own metrics are kept to `up`. To chart something new, add it
 // here first. smartctl and UniFi are kept whole: they're why those profiles
-// exist, and their hosts have NVMe disks.
+// exist, and Prometheus stores them on its own host, not theirs.
 prometheus.relabel "keep" {
 	forward_to = [prometheus.remote_write.central.receiver]
 
