@@ -90,7 +90,11 @@ services:
       # 30k a day) and 13.3's search manifest watcher, which warns every
       # minute that no app plugin publishes search manifests.
       GF_LOG_FILTERS: search-manifest-watcher:error plugin.prometheus:warn plugin.loki:warn query_data:warn
-      GF_FEATURE_TOGGLES_ENABLE: alertingSaveStatePeriodic
+      # Toggle names are case-sensitive here.
+      GF_FEATURE_TOGGLES_alertingSaveStatePeriodic: "true"
+      # The X-XSS-Protection header is obsolete (browsers ignore it) and
+      # Grafana warns at startup that it's going away.
+      GF_SECURITY_X_XSS_PROTECTION: "false"
       GF_UNIFIED_ALERTING_STATE_PERIODIC_SAVE_INTERVAL: ${GRAFANA_ALERT_STATE_SAVE_INTERVAL:-1m}
       # Pocket ID is the only way in: no login form, no basic auth, no
       # built-in admin password to manage.
