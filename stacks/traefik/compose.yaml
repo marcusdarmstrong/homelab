@@ -118,7 +118,7 @@ services:
   # its own records. Services that run once extend this to publish their own
   # names from wherever they run.
   dns-records:
-    image: favonia/cloudflare-ddns:1.17.1
+    image: favonia/cloudflare-ddns:1.18.0
     restart: unless-stopped
     # Reads the tailscale0 interface's address.
     network_mode: host
