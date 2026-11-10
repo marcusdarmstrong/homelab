@@ -9,13 +9,14 @@
 # Usually run for you by scripts/provision.sh from your checkout. Directly
 # (as root; works standalone or from a checkout):
 #   bootstrap.sh --repo https://github.com/<you>/homelab.git --env ./host.env
-#                [--branch main] [--dir /opt/homelab]
+#                [--branch main]
 # The --env file (HOST_NAME plus secrets) is required on the first run;
 # settings come from hosts/<HOST_NAME>.env in the checkout.
 set -euo pipefail
 
 REPO_URL=""
 BRANCH=main
+# scripts/push-env.sh puts the .env here too.
 REPO_DIR=/opt/homelab
 ENV_SRC=""
 FROM_SYNC=0
@@ -27,11 +28,10 @@ while (($#)); do
   case "$1" in
     --repo) REPO_URL="$2"; shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
-    --dir) REPO_DIR="$2"; shift 2 ;;
     --env) ENV_SRC="$(realpath "$2")"; shift 2 ;;
     # Internal: sync.sh, which already holds the deploy lock and deploys next.
     --from-sync) FROM_SYNC=1; shift ;;
-    -h | --help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h | --help) sed -n '2,14p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
 done

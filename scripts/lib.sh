@@ -34,7 +34,9 @@ use_host_env() {
     [[ -n "$name" ]] || die "no HOST_NAME in $PWD/.env"
     base="$(host_env_files "$name" .env)"
   fi
-  storage="$(COMPOSE_ENV_FILES="$base" docker compose config --environment | sed -n 's/^HOST_STORAGE=//p')"
+  # Read from the files rather than resolved by compose, which costs a second
+  # on a Pi and is done once below anyway. The last file to set it wins.
+  storage="$(tr , '\n' <<<"$base" | xargs sed -nE "s/^HOST_STORAGE=[\"']?([^\"' #]*).*/\1/p" | tail -1)"
   case "${storage:-ssd}" in
     ssd) export COMPOSE_ENV_FILES="$base" ;;
     sdcard) export COMPOSE_ENV_FILES="config/sdcard.env,$base" ;;
