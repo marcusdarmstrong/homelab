@@ -240,6 +240,7 @@ prometheus.relabel "keep" {
 			"alloy;loki_(source_docker_target_entries_total|source_journal_target_lines_total|write_sent_entries_total)",
 			"traefik;traefik_(tls_certs_not_after|service_requests_total|service_request_duration_seconds_(sum|count))",
 			"(smartctl-exporter|unpoller);.+",
+			"pihole-exporter;pihole_.+",
 		], "|")
 		action = "keep"
 	}

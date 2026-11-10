@@ -105,7 +105,7 @@ check "public entrypoint serves ntfy" test "$(PORT_=8443 status "ntfy.$Z")" = 20
 check "public entrypoint serves nothing else" test "$(PORT_=8443 status "grafana.$Z")" = 404
 
 section "Metrics and logs (pushed through Traefik)"
-expected_jobs="alloy cadvisor grafana loki network node ntfy pocket-id prometheus smartctl-exporter traefik unpoller wan"
+expected_jobs="alloy cadvisor grafana loki network node ntfy pihole-exporter pocket-id prometheus smartctl-exporter traefik unpoller wan"
 jobs_up() { [[ "$(promql 'count by (job) (up == 1)' | json '" ".join(sorted(r["metric"]["job"] for r in d["data"]["result"]))')" == *"$expected_jobs"* ]]; }
 if wait_for 120 jobs_up; then pass "scrape jobs up: $expected_jobs"; else
   fail "scrape jobs up (have: $(promql 'count by (job) (up == 1)' | json '" ".join(sorted(r["metric"]["job"] for r in d["data"]["result"]))'))"
@@ -161,7 +161,7 @@ before="$(latest_snapshot)"
 COMPOSE_PROFILES=dns SETTLE=5 apply >/dev/null
 check "final backup taken when sso is taken off" test "$(latest_snapshot)" != "$before"
 check "disabled profiles stopped" test -z "$(docker compose ps -q grafana pocket-id pocket-id-backup 2>/dev/null)"
-check "always-on and dns services kept" test "$(docker compose ps --status running --format '{{.Service}}' | sort | tr '\n' ' ')" = "alloy docker-proxy pihole pihole-lists tinyauth traefik "
+check "always-on and dns services kept" test "$(docker compose ps --status running --format '{{.Service}}' | sort | tr '\n' ' ')" = "alloy docker-proxy pihole pihole-exporter pihole-lists tinyauth traefik "
 # The host it moves to has no volume yet.
 docker compose rm --force pocket-id-restore >/dev/null 2>&1
 docker volume rm homelab_pocket-id-data >/dev/null

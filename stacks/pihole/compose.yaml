@@ -67,5 +67,24 @@ services:
     labels:
       - homelab.config-hash=${CONFIG_HASH_PIHOLE_LISTS:-}
 
+  # Query, blocking and upstream stats for Prometheus (Grafana's "Pi-hole"
+  # dashboard), read from Pi-hole's API, which has no password (see above).
+  # No healthcheck: Prometheus's `up` covers it, without Docker recording a
+  # probe on SD cards every 30 seconds.
+  pihole-exporter:
+    image: ekofr/pihole-exporter:v1.3.0
+    restart: unless-stopped
+    profiles: [dns]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      - pihole
+    environment:
+      PIHOLE_HOSTNAME: pihole
+      PIHOLE_PORT: "80"
+      LOG_LEVEL: warn
+    labels:
+      - homelab.metrics.port=9617
+
 volumes:
   pihole-data:
