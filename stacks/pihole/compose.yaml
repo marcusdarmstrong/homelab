@@ -1,8 +1,8 @@
 # Pi-hole v6 DNS sinkhole. Profile: dns
 #
 # Port 53 is published directly on the host. The web UI is only reachable
-# through Traefik at https://pihole.BASE_DOMAIN, behind SSO, so Pi-hole's own
-# password is disabled.
+# through Traefik at https://pihole.<host>.HOMELAB_DOMAIN, behind SSO, so
+# Pi-hole's own password is disabled.
 #
 # Settings passed as FTLCONF_* variables are managed by git and show as
 # read-only in the web UI, and so are the blocklists and allowed domains in
@@ -42,7 +42,7 @@ services:
       - SYS_NICE
     labels:
       - traefik.enable=true
-      - traefik.http.routers.pihole.rule=Host(`pihole.${BASE_DOMAIN}`)
+      - traefik.http.routers.pihole.rule=Host(`pihole.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}`)
       - traefik.http.routers.pihole.middlewares=sso@docker,pihole-admin
       - traefik.http.services.pihole.loadbalancer.server.port=80
       - traefik.http.middlewares.pihole-admin.redirectregex.regex=^(https://[^/]+)/?$$

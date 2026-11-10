@@ -11,9 +11,10 @@
 # nightly (and once more when sso is taken off a host; see scripts/apply.sh).
 # Moving it to another host is a matter of moving the profile.
 #
-# tinyauth (https://auth.BASE_DOMAIN, always on) turns that into a Traefik
-# forward-auth middleware, `sso@docker`, for apps without their own OIDC
-# support. Apps that speak OIDC natively (Grafana) talk to Pocket ID directly.
+# tinyauth (https://auth.<host>.HOMELAB_DOMAIN, always on) turns that into a
+# Traefik forward-auth middleware, `sso@docker`, for apps without their own
+# OIDC support. Apps that speak OIDC natively (Grafana) talk to Pocket ID
+# directly.
 #
 # One-time setup: see "Single sign-on" in the README.
 
@@ -109,7 +110,7 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      TINYAUTH_APPURL: https://auth.${BASE_DOMAIN}
+      TINYAUTH_APPURL: https://auth.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}
       TINYAUTH_AUTH_TRUSTEDPROXIES: ${DOCKER_SUBNET:-172.30.0.0/24}
       TINYAUTH_AUTH_SECURECOOKIE: "true"
       # Reads per-app access rules from container labels via the proxy.
@@ -123,7 +124,7 @@ services:
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_AUTHURL: https://id.${HOMELAB_DOMAIN:?}/authorize
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_TOKENURL: https://id.${HOMELAB_DOMAIN:?}/api/oidc/token
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_USERINFOURL: https://id.${HOMELAB_DOMAIN:?}/api/oidc/userinfo
-      TINYAUTH_OAUTH_PROVIDERS_POCKETID_REDIRECTURL: https://auth.${BASE_DOMAIN}/api/oauth/callback/pocketid
+      TINYAUTH_OAUTH_PROVIDERS_POCKETID_REDIRECTURL: https://auth.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}/api/oauth/callback/pocketid
       TINYAUTH_OAUTH_PROVIDERS_POCKETID_SCOPES: openid email profile groups
     volumes:
       - tinyauth-data:/data
@@ -132,7 +133,7 @@ services:
       - docker-api
     labels:
       - traefik.enable=true
-      - traefik.http.routers.tinyauth.rule=Host(`auth.${BASE_DOMAIN}`)
+      - traefik.http.routers.tinyauth.rule=Host(`auth.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}`)
       - traefik.http.services.tinyauth.loadbalancer.server.port=3000
       - traefik.http.middlewares.sso.forwardauth.address=http://tinyauth:3000/api/auth/traefik
       - traefik.http.middlewares.sso.forwardauth.authResponseHeaders=Remote-User,Remote-Email,Remote-Name,Remote-Groups

@@ -86,7 +86,7 @@ placeholder_keys() { grep -iE '^[A-Za-z0-9_]+=(change-?me|.*<[a-z-]+>)' <<<"$HOS
 # plus hosts/NAME.secrets.env if there is one) into a temp file, check it
 # against the committed host files (valid compose config, no placeholders),
 # and load it as load_host_env does. Sets env_file (the assembled .env) and
-# target (HOST_SSH, default NAME.local).
+# target (NAME.local, where ssh reaches it).
 load_host_file() {
   local name="$1" placeholders
   [[ -f hosts/secrets.env ]] || die "no hosts/secrets.env (start from hosts/secrets.env.example and scripts/gen-secrets.sh)"
@@ -114,8 +114,7 @@ load_host_file() {
   load_host_env
   placeholders="$(placeholder_keys)"
   [[ -z "$placeholders" ]] || die "your secrets still have placeholder values: $placeholders"
-  target="$(env_get HOST_SSH)"
-  target="${target:-$name.local}"
+  target="$name.local"
   log "host $name at $target, profiles: $(env_get COMPOSE_PROFILES)"
 }
 

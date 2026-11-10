@@ -49,7 +49,7 @@ services:
       - docker-api
     labels:
       - traefik.enable=true
-      - traefik.http.routers.alloy.rule=Host(`alloy.${BASE_DOMAIN}`)
+      - traefik.http.routers.alloy.rule=Host(`alloy.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}`)
       - traefik.http.routers.alloy.middlewares=sso@docker
       - traefik.http.services.alloy.loadbalancer.server.port=12345
       - homelab.config-hash=${CONFIG_HASH_ALLOY_CONFIG:-}

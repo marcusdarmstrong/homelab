@@ -2,8 +2,8 @@
 #
 # Certificates come from Let's Encrypt via the DNS-01 challenge, so nothing
 # has to be reachable from the internet. Each host gets one cert covering
-# *.BASE_DOMAIN (its own pages) and *.HOMELAB_DOMAIN (services that run once,
-# wherever they run), renewed automatically ~30 days before expiry.
+# *.<host>.HOMELAB_DOMAIN (its own pages) and *.HOMELAB_DOMAIN (services that
+# run once, wherever they run), renewed automatically ~30 days before expiry.
 #
 # Services opt in with `traefik.enable=true` labels. A Host() rule is all a
 # service needs; TLS and the cert resolver are entrypoint defaults below.
@@ -37,10 +37,10 @@ services:
       - --entrypoints.websecure.address=:443
       - --entrypoints.websecure.asDefault=true
       - --entrypoints.websecure.http.tls.certresolver=letsencrypt
-      # *.HOMELAB_DOMAIN already covers BASE_DOMAIN itself; Let's Encrypt
-      # refuses an order that lists both.
+      # *.HOMELAB_DOMAIN already covers <host>.HOMELAB_DOMAIN itself; Let's
+      # Encrypt refuses an order that lists both.
       - --entrypoints.websecure.http.tls.domains[0].main=*.${HOMELAB_DOMAIN:?}
-      - --entrypoints.websecure.http.tls.domains[0].sans=*.${BASE_DOMAIN:?}
+      - --entrypoints.websecure.http.tls.domains[0].sans=*.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}
       - --entrypoints.public.address=:8443
       - --entrypoints.public.http.tls=true
 
@@ -73,7 +73,7 @@ services:
       default:
         # Containers can reach this host's tinyauth without leaving the host.
         aliases:
-          - auth.${BASE_DOMAIN}
+          - auth.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}
       docker-api:
     depends_on:
       - docker-proxy
@@ -84,7 +84,7 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
-      - traefik.http.routers.dashboard.rule=Host(`traefik.${BASE_DOMAIN}`)
+      - traefik.http.routers.dashboard.rule=Host(`traefik.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}`)
       - traefik.http.routers.dashboard.service=api@internal
       - traefik.http.routers.dashboard.middlewares=sso@docker
       # Only the tailnet (other hosts, your devices) and this host's own
@@ -113,10 +113,10 @@ services:
     networks:
       - docker-api
 
-  # Keeps BASE_DOMAIN and *.BASE_DOMAIN pointing at this host's tailnet
-  # address in Cloudflare, so a rebuilt Pi (new address) fixes its own
-  # records. Services that run once extend this to publish their own names
-  # from wherever they run.
+  # Keeps <host>.HOMELAB_DOMAIN and *.<host>.HOMELAB_DOMAIN pointing at this
+  # host's tailnet address in Cloudflare, so a rebuilt Pi (new address) fixes
+  # its own records. Services that run once extend this to publish their own
+  # names from wherever they run.
   dns-records:
     image: favonia/cloudflare-ddns:1.17.1
     restart: unless-stopped
@@ -133,7 +133,7 @@ services:
     environment:
       CLOUDFLARE_API_TOKEN: ${CF_DNS_API_TOKEN:-}
       TZ: ${TZ:-UTC}
-      IP4_DOMAINS: ${BASE_DOMAIN:?},*.${BASE_DOMAIN:?}
+      IP4_DOMAINS: ${HOST_NAME:?}.${HOMELAB_DOMAIN:?},*.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}
       IP4_PROVIDER: local.iface:tailscale0
       IP6_PROVIDER: none
       # Kept when the service stops or moves; the next host to run it

@@ -21,10 +21,8 @@ settings file with a secret-looking key (`*_SECRET`, `*_PASSWORD`, `*_TOKEN`,
 |---|---|---|
 | `COMPOSE_PROFILES` | none | What runs here, comma-separated: `sso`, `observability`, `dns`, `unifi`, `smart` (see the README). CI checks `sso` and `observability` are each on exactly one host, and `unifi` on at most one per site. |
 | `SITE` | required | `home` or `basecamp`; labels this host's metrics and logs. |
-| `BASE_DOMAIN` | required | This host's own name, `<host>.HOMELAB_DOMAIN`. Its pages live under it (`pihole.luna.…`). |
-| `HOMELAB_DOMAIN` | required | The zone for everything; services that run once live at `<service>.HOMELAB_DOMAIN`. |
+| `HOMELAB_DOMAIN` | required | The zone for everything: each host's pages live under `<host>.HOMELAB_DOMAIN` (`pihole.luna.…`), and services that run once at `<service>.HOMELAB_DOMAIN`. |
 | `TZ` | `UTC` | |
-| `HOST_SSH` | `<name>.local` | How `provision.sh` and `push-env.sh` reach the host. |
 | `HOST_STORAGE` | `ssd` | `ssd` (an NVMe drive) or `sdcard`; see the README's SD-card section. With `ssd`, `provision.sh` moves a host that booted from its SD card onto the NVMe. |
 | `HOST_DNS` | `"1.1.1.1 1.0.0.1"` | The Pi's own resolvers. Deliberately not Pi-hole, so the host can always pull images and sync git. |
 | `POE_FAN_TEMPS` | firmware's `40,45,50,55` | The four temperatures (°C) at which a PoE HAT's fan steps up a speed (12%, 25%, 50%, full). Changing it reboots the host. |

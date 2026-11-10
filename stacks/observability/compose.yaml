@@ -21,14 +21,14 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=${PROM_RETENTION:-30d}
       - --web.enable-remote-write-receiver
-      - --web.external-url=https://prometheus.${BASE_DOMAIN}
+      - --web.external-url=https://prometheus.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     labels:
       - traefik.enable=true
       # The UI, under this host's name behind SSO.
-      - traefik.http.routers.prometheus.rule=Host(`prometheus.${BASE_DOMAIN}`)
+      - traefik.http.routers.prometheus.rule=Host(`prometheus.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}`)
       - traefik.http.routers.prometheus.middlewares=sso@docker
       - traefik.http.routers.prometheus.service=prometheus
       # Remote write from every host's Alloy, at the fixed name.

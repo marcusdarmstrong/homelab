@@ -53,10 +53,10 @@ household device uses depends on the other site or on Tailscale.
 - **Image updates**: images are pinned to exact tags. Renovate opens a PR for
   each release once it's 14 days old, and merging the PR deploys it. Patch
   releases automerge once CI passes (see `renovate.json5`).
-- **HTTPS**: each Traefik gets a Let's Encrypt cert for `*.BASE_DOMAIN` and
-  `*.HOMELAB_DOMAIN` through the DNS-01 challenge, so nothing needs to be
-  internet-exposed for it. Renewal is automatic, and an alert fires if it
-  falls behind.
+- **HTTPS**: each Traefik gets a Let's Encrypt cert for
+  `*.<host>.HOMELAB_DOMAIN` and `*.HOMELAB_DOMAIN` through the DNS-01
+  challenge, so nothing needs to be internet-exposed for it. Renewal is
+  automatic, and an alert fires if it falls behind.
 - **SSO, no passwords**: Pocket ID is a passkey-only OIDC provider, so
   1Password, Bitwarden, iCloud Keychain or a hardware key all work. Grafana
   logs in through it directly. Everything else (Traefik, Pi-hole, Prometheus,
@@ -172,8 +172,7 @@ Let's Encrypt needs no setup; Traefik registers automatically.
    Imager, with your user and SSH key, and boot from it. Do this even on a
    Pi with an NVMe drive: with `HOST_STORAGE=ssd`, `provision.sh` installs
    onto the NVMe itself, and asks first if the drive isn't blank. Make sure
-   you can `ssh` to it (by default as `<name>.local`; set `HOST_SSH`
-   otherwise).
+   you can `ssh` to it as `<name>.local`.
 2. Write `hosts/<name>.env` ([settings](hosts/README.md)), then commit and
    push it: the host reads its settings from git, and CI checks them.
 3. The first time only: create `hosts/secrets.env` from
@@ -332,10 +331,10 @@ wearing out").
 Every host joins the tailnet on its first deploy with `TS_AUTHKEY`, as
 `HOST_NAME` tagged `tag:homelab`, and stays logged in through its state
 volume. There are no subnet routes and no connection logs go to Tailscale.
-Its `100.x` address is published as `BASE_DOMAIN`, so those addresses are in
-public DNS; they lead nowhere outside the tailnet. If a name doesn't resolve
-on one of our networks, check that resolver isn't dropping public answers in
-`100.64.0.0/10` (DNS rebind protection).
+Its `100.x` address is published as `<host>.HOMELAB_DOMAIN`, so those
+addresses are in public DNS; they lead nowhere outside the tailnet. If a name
+doesn't resolve on one of our networks, check that resolver isn't dropping
+public answers in `100.64.0.0/10` (DNS rebind protection).
 
 If Tailscale's coordination servers are down, existing connections keep
 working; households never notice.

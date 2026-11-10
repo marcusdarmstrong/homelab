@@ -19,7 +19,7 @@
 # secret changes go out with scripts/push-env.sh; this refuses a host that's
 # already provisioned.
 #
-# Reaches the host at HOST_SSH from its host file (default: <name>.local).
+# Reaches the host over ssh as <name>.local.
 # sudo may prompt for a password.
 set -euo pipefail
 

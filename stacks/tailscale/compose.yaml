@@ -2,8 +2,9 @@
 #
 # The tailnet carries everything between hosts (SSO, metrics, logs) and from
 # your own devices to admin pages; household traffic never touches it. Each
-# host gets a stable 100.x address, published as BASE_DOMAIN by dns-records
-# (stacks/traefik). No subnet routes: the sites' LANs stay separate.
+# host gets a stable 100.x address, published as <host>.HOMELAB_DOMAIN by
+# dns-records (stacks/traefik). No subnet routes: the sites' LANs stay
+# separate.
 #
 # Joins as HOST_NAME, tagged tag:homelab (README → External setup).
 

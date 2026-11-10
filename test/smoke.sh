@@ -29,7 +29,7 @@ fi
 
 env_value() { sed -n "s/^$1=//p" test/local.env; }
 Z="$(env_value HOMELAB_DOMAIN)" # services that run once
-H="$(env_value BASE_DOMAIN)"    # this host's own pages
+H="$(env_value HOST_NAME).$Z"  # this host's own pages
 UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15'
 API_KEY="$(env_value POCKET_ID_STATIC_API_KEY)"
 NTFY_TOKEN="$(env_value NTFY_GRAFANA_TOKEN)"
