@@ -1,7 +1,7 @@
 FROM alpine:3.24.3
 
 # renovate: datasource=github-releases depName=prometheus-community/smartctl_exporter
-ARG SMARTCTL_EXPORTER_VERSION=0.14.0
+ARG SMARTCTL_EXPORTER_VERSION=0.15.0
 ARG TARGETARCH
 
 RUN apk add --no-cache smartmontools \
