@@ -14,12 +14,18 @@ services:
     image: pihole/pihole:2026.10.0
     restart: unless-stopped
     profiles: [dns]
+    # Without a password, Pi-hole's API answers only requests addressed to
+    # one of its own names (an IP, pi.hole, its hostname, webserver.domain),
+    # against DNS rebinding. pihole-lists and pihole-exporter use the
+    # hostname; the web UI, through Traefik, webserver.domain.
+    hostname: pihole
     ports:
       - "53:53/tcp"
       - "53:53/udp"
     environment:
       TZ: ${TZ:-UTC}
       FTLCONF_webserver_api_password: ""
+      FTLCONF_webserver_domain: pihole.${HOST_NAME:?}.${HOMELAB_DOMAIN:?}
       FTLCONF_webserver_port: "80"
       # Docker NATs queries, so Pi-hole sees them arriving from the bridge
       # network rather than the LAN.
