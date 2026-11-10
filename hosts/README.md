@@ -5,7 +5,7 @@ A host's configuration is layered from these files, later ones winning:
 | File | In git | Holds |
 |---|---|---|
 | `config/sdcard.env` | yes | write-saving settings, only if the host has `HOST_STORAGE=sdcard` |
-| `hosts/common.env` | yes | settings every host shares |
+| `config/common.env` | yes | settings every host shares |
 | `hosts/<name>.env` | yes | this host's settings |
 | `.env` on the host | **no** | `HOST_NAME` plus the secrets, assembled by `scripts/push-env.sh` from your `hosts/secrets.env` and `hosts/<name>.secrets.env` |
 

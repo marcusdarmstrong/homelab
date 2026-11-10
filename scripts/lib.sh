@@ -10,7 +10,7 @@ HOMELAB_BRANCH="${HOMELAB_BRANCH:-main}"
 # A host's config is layered from these files, later ones winning:
 #
 #   config/sdcard.env      when the host declares HOST_STORAGE=sdcard
-#   hosts/common.env       settings every host shares (committed)
+#   config/common.env      settings every host shares (committed)
 #   hosts/<HOST_NAME>.env  this host's settings (committed)
 #   .env                   HOST_NAME and the secrets (on the host only)
 #
@@ -21,7 +21,7 @@ local_host_name() { sed -n 's/^HOST_NAME=//p' .env 2>/dev/null; }
 # comma-separated for COMPOSE_ENV_FILES.
 host_env_files() {
   [[ -f "hosts/$1.env" ]] || die "no hosts/$1.env in this checkout"
-  echo "hosts/common.env,hosts/$1.env,$2"
+  echo "config/common.env,hosts/$1.env,$2"
 }
 
 # Point every later `docker compose` call at the host's env: the files above
@@ -54,7 +54,7 @@ env_get() { sed -n "s/^$1=//p" <<<"$HOST_ENV"; }
 # this differs from what its last successful run recorded. Run from the repo.
 host_config_hash() {
   cat scripts/bootstrap.sh scripts/lib.sh systemd/* config/sdcard.env \
-    hosts/common.env "hosts/$(local_host_name).env" .env | sha256sum | cut -d' ' -f1
+    config/common.env "hosts/$(local_host_name).env" .env | sha256sum | cut -d' ' -f1
 }
 # shellcheck disable=SC2034  # used by bootstrap.sh and sync.sh
 BOOTSTRAP_STATE="${HOMELAB_STATE_DIR:-/var/lib/homelab}/bootstrapped"
@@ -90,8 +90,8 @@ load_host_file() {
   git fetch --quiet origin "$HOMELAB_BRANCH"
   git cat-file -e "origin/$HOMELAB_BRANCH:hosts/$name.env" 2>/dev/null ||
     die "hosts/$name.env isn't on origin/$HOMELAB_BRANCH; commit and push it first"
-  git diff --quiet "origin/$HOMELAB_BRANCH" -- hosts/common.env "hosts/$name.env" ||
-    die "hosts/common.env or hosts/$name.env differs from origin/$HOMELAB_BRANCH; commit and push it first"
+  git diff --quiet "origin/$HOMELAB_BRANCH" -- config/common.env "hosts/$name.env" ||
+    die "config/common.env or hosts/$name.env differs from origin/$HOMELAB_BRANCH; commit and push it first"
 
   env_file="$(mktemp)"
   # shellcheck disable=SC2064  # expand now: env_file is global and may be reused

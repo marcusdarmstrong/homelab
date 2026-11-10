@@ -386,7 +386,7 @@ start over on the new host.
 | Add a service | Add it to a stack (or a new `stacks/<x>/compose.yaml` listed in `compose.yaml`) with a `profiles:` entry, Traefik labels (`sso@docker` for admin pages) and optionally `homelab.metrics.port` |
 | Enable something on a host | Add its profile to `COMPOSE_PROFILES` in `hosts/<name>.env`, open a PR, merge |
 | Move a service | See [Backups and moving services](#backups-and-moving-services) |
-| Change a host setting | Edit `hosts/<name>.env` or `hosts/common.env`, open a PR, merge |
+| Change a host setting | Edit `hosts/<name>.env` or `config/common.env`, open a PR, merge |
 | Change a secret | Edit `hosts/secrets.env`, then `scripts/push-env.sh <name>` for each host |
 | Block or allow something | Edit `stacks/pihole/lists/`, open a PR, merge |
 | Roll back | `git revert` and push |
@@ -422,9 +422,9 @@ compose interpolates services whose profiles are off. Add it to
 ```
 compose.yaml              project root: includes every stack, defines networks
 hosts/README.md           every host setting, documented
-hosts/common.env          settings every host shares
 hosts/<name>.env          each host's settings (committed)
 hosts/secrets.env.example every secret, documented (yours: hosts/secrets.env, gitignored)
+config/common.env         settings every host shares
 config/sdcard.env         write-saving settings for SD-card hosts
 stacks/traefik/           reverse proxy + ACME + Docker API proxy + this host's DNS records
 stacks/tailscale/         tailnet membership

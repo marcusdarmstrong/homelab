@@ -25,7 +25,7 @@ leaks="$(grep -HE '^[A-Z0-9_]*(SECRET|PASSWORD|TOKEN|KEY|HASH|EMAIL)[A-Z0-9_]*='
 # Every host's real settings, with the example secrets standing in for its own.
 hosts=()
 for f in "${committed[@]}"; do
-  [[ "$f" == hosts/* && "$f" != hosts/common.env ]] && hosts+=("$(basename "$f" .env)")
+  [[ "$f" == hosts/* ]] && hosts+=("$(basename "$f" .env)")
 done
 ((${#hosts[@]})) || die "no hosts/<name>.env"
 secrets="$(mktemp)"
