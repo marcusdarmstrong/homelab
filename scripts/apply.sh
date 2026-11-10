@@ -61,7 +61,7 @@ log "profiles: ${profiles:-<none>}"
 # a healthcheck), so a crash-looping service fails the deploy.
 # HOMELAB_FORCE_RECREATE: bootstrap sets it when a daemon-level setting that's
 # fixed at container creation (the log driver) changed.
-docker compose up -d --remove-orphans --wait --wait-timeout "${HOMELAB_WAIT_TIMEOUT:-300}" \
+docker compose up -d --remove-orphans --wait --wait-timeout 300 \
   ${HOMELAB_FORCE_RECREATE:+--force-recreate}
 
 project=homelab # `name:` in compose.yaml

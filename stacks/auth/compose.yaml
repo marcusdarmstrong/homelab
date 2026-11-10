@@ -22,7 +22,7 @@ x-restic: &restic
   RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
   AWS_ACCESS_KEY_ID: ${RESTIC_S3_ACCESS_KEY_ID:-}
   AWS_SECRET_ACCESS_KEY: ${RESTIC_S3_SECRET_ACCESS_KEY:-}
-  AWS_DEFAULT_REGION: ${RESTIC_S3_REGION:-auto}
+  AWS_DEFAULT_REGION: auto # R2
 
 services:
   pocket-id:
@@ -77,7 +77,7 @@ services:
     environment:
       <<: *restic
       TZ: ${TZ:-UTC}
-      BACKUP_CRON: ${BACKUP_CRON:-0 30 3 * * *}
+      BACKUP_CRON: "0 30 3 * * *" # before OS updates at 04:00
       RESTIC_BACKUP_SOURCES: /data/pocket-id
       RESTIC_BACKUP_ARGS: --tag pocket-id
       RESTIC_FORGET_ARGS: --prune --keep-daily 7 --keep-weekly 5 --keep-monthly 12

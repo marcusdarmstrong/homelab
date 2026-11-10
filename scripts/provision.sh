@@ -64,7 +64,7 @@ if [[ "$(env_get HOST_STORAGE)" != sdcard && "$(booted_from)" == /dev/mmcblk* ]]
   log "$name is running from its NVMe"
 fi
 
-repo="${HOMELAB_REPO:-$(git remote get-url origin | sed -E 's#^git@github\.com:#https://github.com/#')}"
+repo="$(git remote get-url origin | sed -E 's#^git@github\.com:#https://github.com/#')"
 log "bootstrapping from $repo"
 bootstrap=/tmp/homelab-bootstrap.sh
 scp -q scripts/bootstrap.sh "$target:$bootstrap"

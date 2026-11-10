@@ -19,7 +19,7 @@ services:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_AUTH_ONCE: "true"
       TS_HOSTNAME: ${HOST_NAME:?}
-      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---advertise-tags=tag:homelab}
+      TS_EXTRA_ARGS: --advertise-tags=tag:homelab
       TS_STATE_DIR: /var/lib/tailscale
       # Kernel networking, so the host and its containers reach 100.x
       # addresses directly.

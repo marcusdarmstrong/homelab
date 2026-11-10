@@ -25,7 +25,6 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/lib.sh
 source "$REPO_DIR/scripts/lib.sh"
 
-STATE_DIR="${HOMELAB_STATE_DIR:-/var/lib/homelab}"
 state_file="$STATE_DIR/applied"
 metrics_dir="$STATE_DIR/metrics"
 

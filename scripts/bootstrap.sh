@@ -240,14 +240,10 @@ fi
 
 # ---- OS auto-updates ------------------------------------------------------------------
 # Everything from Debian, Raspberry Pi (kernel, firmware, bootloader) and
-# Docker, not just Debian security. Runs at OS_UPGRADE_TIME, after the 03:30
-# backup, and reboots at OS_REBOOT_TIME only when an update needs it.
-# Docker engine upgrades don't stop containers (live-restore); a reboot
-# means a minute or two without DNS from this Pi.
-upgrade_time="$(env_get OS_UPGRADE_TIME)"
-reboot_time="$(env_get OS_REBOOT_TIME)"
-auto_reboot="$(env_get OS_AUTO_REBOOT)"
-
+# Docker, not just Debian security. Runs at 04:00, after the 03:30 backup,
+# and reboots at 04:30 only when an update needs it. Docker engine upgrades
+# don't stop containers (live-restore); a reboot means a minute or two
+# without DNS from this Pi.
 write_file /etc/apt/apt.conf.d/20auto-upgrades 'APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::AutocleanInterval "7";' || true
@@ -262,14 +258,14 @@ write_file /etc/apt/apt.conf.d/52homelab-unattended-upgrades "Unattended-Upgrade
 };
 Unattended-Upgrade::Remove-Unused-Kernel-Packages \"true\";
 Unattended-Upgrade::Remove-Unused-Dependencies \"true\";
-Unattended-Upgrade::Automatic-Reboot \"${auto_reboot:-true}\";
+Unattended-Upgrade::Automatic-Reboot \"true\";
 Unattended-Upgrade::Automatic-Reboot-WithUsers \"true\";
-Unattended-Upgrade::Automatic-Reboot-Time \"${reboot_time:-04:30}\";
+Unattended-Upgrade::Automatic-Reboot-Time \"04:30\";
 Unattended-Upgrade::SyslogEnable \"true\";" || true
 
 if write_file /etc/systemd/system/apt-daily-upgrade.timer.d/homelab.conf "[Timer]
 OnCalendar=
-OnCalendar=*-*-* ${upgrade_time:-04:00}
+OnCalendar=*-*-* 04:00
 RandomizedDelaySec=0"; then
   systemctl daemon-reload
   systemctl restart apt-daily-upgrade.timer
@@ -314,19 +310,16 @@ fi
 
 # ---- reboot ------------------------------------------------------------------------
 # Settings above that only take effect on a reboot: the next deploy to
-# succeed reboots (sync.sh), unless OS_AUTO_REBOOT is off or this same reboot,
-# with these same settings, already happened and didn't help. After a deploy
-# reboots, this script runs again and finds nothing left to reboot for.
+# succeed reboots (sync.sh), unless this same reboot, with these same
+# settings, already happened and didn't help. After a deploy reboots, this
+# script runs again and finds nothing left to reboot for.
 install -d "$(dirname "$REBOOT_REQUIRED")"
 if ((${#reboot_reasons[@]})); then
   printf -v reasons '%s, ' "${reboot_reasons[@]}"
   reasons="${reasons%, }"
   printf '%s\n' "$reasons" >"$REBOOT_REQUIRED"
   rebooted_for="$(host_config_hash) $reasons"
-  if [[ "$(env_get OS_AUTO_REBOOT)" == false ]]; then
-    rm -f "$REBOOT_NOW"
-    log "reboot required: $reasons (OS_AUTO_REBOOT is off, so reboot by hand)"
-  elif [[ "$(cat "$REBOOTED_FOR" 2>/dev/null)" == "$rebooted_for" ]]; then
+  if [[ "$(cat "$REBOOTED_FOR" 2>/dev/null)" == "$rebooted_for" ]]; then
     rm -f "$REBOOT_NOW"
     log "warning: still needs a reboot for $reasons, though it just rebooted for that; not rebooting again"
   else

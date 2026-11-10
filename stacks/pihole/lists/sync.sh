@@ -10,7 +10,7 @@
 # One entry per line; blank lines and # comments are ignored.
 set -euo pipefail
 
-api="${PIHOLE_API:-http://pihole/api}"
+api=http://pihole/api
 dir="$(dirname "$0")"
 
 wanted() { sed -e 's/#.*//' -e 's/[[:space:]]//g' "$dir/$1" | grep . | sort -u || true; }

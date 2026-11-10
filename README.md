@@ -209,8 +209,7 @@ When something it changed only takes effect on a reboot (the kernel command
 line, firmware settings, swap), the Pi reboots as soon as that deploy
 succeeds, and `bootstrap.sh` runs again afterwards. If the reboot didn't
 help, it doesn't reboot again for the same reasons and settings, and the
-"Reboot pending" alert fires after two days. `OS_AUTO_REBOOT=false` leaves
-these reboots to you too.
+"Reboot pending" alert fires after two days.
 
 The Pi resolves through fixed upstreams rather than its own Pi-hole, so it can
 still pull images and sync git while Pi-hole restarts, and its containers
@@ -268,13 +267,11 @@ logging in, and only Grafana's token can publish.
 
 ### OS updates
 
-Upgrades run daily at `OS_UPGRADE_TIME` (default 04:00, after the 03:30
-backups). That covers Debian (including security and point-release updates),
-the Raspberry Pi repo (kernel, firmware, bootloader) and Docker. When an update
-needs a reboot, the Pi reboots at `OS_REBOOT_TIME` (default 04:30); set
-`OS_AUTO_REBOOT=false` to do it by hand. A reboot means a minute or two
-without DNS from that Pi. Docker engine upgrades don't stop containers
-(`live-restore`).
+Upgrades run daily at 04:00, after the 03:30 backups. That covers Debian
+(including security and point-release updates), the Raspberry Pi repo
+(kernel, firmware, bootloader) and Docker. When an update needs a reboot, the
+Pi reboots at 04:30. A reboot means a minute or two without DNS from that Pi.
+Docker engine upgrades don't stop containers (`live-restore`).
 
 "OS auto-update failed" and "Reboot pending" (more than 2 days) alerts cover
 the failure cases. These are host-level settings applied by `bootstrap.sh`,
@@ -353,7 +350,7 @@ else changed in the UI (groups, clients) lives only in that Pi-hole's volume.
 ### Backups and moving services
 
 Pocket ID is the only service whose data can't be recreated, so it's the only
-one backed up: nightly at 03:30 by default (`BACKUP_CRON`), to its own R2
+one backed up: nightly at 03:30, to its own R2
 bucket, keeping 7 daily, 5 weekly and 12 monthly snapshots. Its SQLite
 database is copied live; it writes rarely, but check what you restore.
 Running `restic check` occasionally is worthwhile.

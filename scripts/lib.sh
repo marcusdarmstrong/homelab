@@ -59,7 +59,9 @@ host_config_hash() {
     config/common.env "hosts/$(local_host_name).env" .env | sha256sum | cut -d' ' -f1
 }
 # shellcheck disable=SC2034  # used by bootstrap.sh and sync.sh
-BOOTSTRAP_STATE="${HOMELAB_STATE_DIR:-/var/lib/homelab}/bootstrapped"
+STATE_DIR=/var/lib/homelab
+# shellcheck disable=SC2034
+BOOTSTRAP_STATE="$STATE_DIR/bootstrapped"
 
 # Reboots that host-level settings need. bootstrap.sh writes why to
 # REBOOT_REQUIRED (the "Reboot pending" alert watches it), and REBOOT_NOW when
@@ -71,7 +73,7 @@ REBOOT_REQUIRED=/run/homelab/reboot-required
 # shellcheck disable=SC2034
 REBOOT_NOW=/run/homelab/reboot-now
 # shellcheck disable=SC2034
-REBOOTED_FOR="${HOMELAB_STATE_DIR:-/var/lib/homelab}/rebooted-for"
+REBOOTED_FOR="$STATE_DIR/rebooted-for"
 
 # Keys still holding a placeholder from hosts/secrets.env.example (changeme,
 # changeme-at-least-16-chars, changeme@example.com, <account-id>),

@@ -62,7 +62,7 @@ latest_snapshot() { # ID of the latest snapshot in Pocket ID's local repository
     --entrypoint restic "$(grep -oE 'mazzolino/restic:\S+' stacks/auth/compose.yaml | head -1)" \
     -r /restic/pocket-id snapshots --latest 1 --json | json 'd[-1]["id"] if d else ""'
 }
-apply() { HOMELAB_SETTLE_SECONDS="${SETTLE:-15}" scripts/apply.sh 2>&1 | grep '\[homelab\]' | grep -v 'warning:' || true; }
+apply() { HOMELAB_SETTLE_SECONDS=15 scripts/apply.sh 2>&1 | grep '\[homelab\]' | grep -v 'warning:' || true; }
 
 section "Deploy"
 apply

@@ -21,7 +21,7 @@ services:
     security_opt:
       - no-new-privileges:true
     command:
-      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --log.level=INFO
       - --accesslog=true
       - --ping=true
       - --api.dashboard=true
@@ -55,7 +55,7 @@ services:
       # production starts clean.
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/${ACME_STORAGE:-acme.json}
       - --certificatesresolvers.letsencrypt.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
-      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=${ACME_DNS_PROVIDER:-cloudflare}
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
       # Check propagation against public resolvers, independent of whatever
       # the host happens to use.
       - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53

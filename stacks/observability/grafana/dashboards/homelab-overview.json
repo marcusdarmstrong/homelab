@@ -379,7 +379,7 @@
           "range": false
         }
       ],
-      "description": "An OS update or a host setting is waiting on a reboot. Settings reboot on their own deploy; updates at OS_REBOOT_TIME."
+      "description": "An OS update or a host setting is waiting on a reboot. Settings reboot on their own deploy; updates at 04:30."
     },
     {
       "id": 6,
