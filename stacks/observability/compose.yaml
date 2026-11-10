@@ -80,6 +80,16 @@ services:
       GF_DATABASE_WAL: "true"
       # Alert state is saved on this interval rather than after every
       # evaluation, which rewrites a row per rule; config/sdcard.env sets 5m.
+      # Each bundled data source runs as its own process (25-35 MB each), and
+      # only Prometheus and Loki are used; disabled plugins aren't installed
+      # or started. The Pyroscope and Traces apps need data sources disabled
+      # here. Drop one from this list to use it.
+      GF_PLUGINS_DISABLE_PLUGINS: >-
+        cloudwatch,elasticsearch,grafana-postgresql-datasource,grafana-pyroscope-datasource,influxdb,jaeger,mssql,mysql,opentsdb,stackdriver,tempo,zipkin,grafana-pyroscope-app,grafana-exploretraces-app
+      # Quiet the per-query lines (two for every panel and alert query, about
+      # 30k a day) and 13.3's search manifest watcher, which warns every
+      # minute that no app plugin publishes search manifests.
+      GF_LOG_FILTERS: search-manifest-watcher:error plugin.prometheus:warn plugin.loki:warn query_data:warn
       GF_FEATURE_TOGGLES_ENABLE: alertingSaveStatePeriodic
       GF_UNIFIED_ALERTING_STATE_PERIODIC_SAVE_INTERVAL: ${GRAFANA_ALERT_STATE_SAVE_INTERVAL:-1m}
       # Pocket ID is the only way in: no login form, no basic auth, no
