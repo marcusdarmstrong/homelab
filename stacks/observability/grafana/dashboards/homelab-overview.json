@@ -912,7 +912,37 @@
             "spanNulls": false
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* slows down at$"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#8e8e8e"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -933,9 +963,18 @@
           },
           "expr": "max by (host) (node_hwmon_temp_celsius{chip=~\"nvme.*\",sensor=\"temp1\",host=~\"$host\"})",
           "legendFormat": "{{host}}"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "max by (host) (smartctl_device_temperature{temperature_type=\"op_limit_max\",host=~\"$host\"})",
+          "legendFormat": "{{host}} slows down at"
         }
       ],
-      "description": "The drive's composite temperature."
+      "description": "The drive's composite temperature. The dashed line is the drive's own warning limit, where it starts slowing itself down to cool off; \"NVMe running hot\" fires within 5\u00b0C of it."
     },
     {
       "id": 16,
