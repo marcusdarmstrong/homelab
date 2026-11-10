@@ -3,10 +3,10 @@
 Docker Compose config for my Raspberry Pis, deployed GitOps-style: push to
 `main` and every host converges within about a minute.
 
-| Host   | Hardware    | Site     | `COMPOSE_PROFILES`     |
-|--------|-------------|----------|------------------------|
-| luna   | Pi 4        | home     | `dns`                  |
-| europa | Pi 5 + NVMe | basecamp | `sso,observability`    |
+| Host   | Hardware               | Site     | `COMPOSE_PROFILES`            |
+|--------|------------------------|----------|-------------------------------|
+| luna   | Pi 4, SD card, PoE HAT | home     | `dns,unifi`                   |
+| europa | Pi 5 + NVMe            | basecamp | `sso,observability,dns,smart` |
 
 ## How it works
 
@@ -27,7 +27,7 @@ household device uses depends on the other site or on Tailscale.
 | _(always)_      | Traefik, tinyauth, Tailscale, Alloy, DNS records, Docker API proxy | every host |
 | `sso`           | Pocket ID, with its backups                 | exactly one host     |
 | `observability` | Prometheus, Loki, Grafana (and its image renderer), ntfy | exactly one host |
-| `dns`           | Pi-hole                                     | any number of hosts  |
+| `dns`           | Pi-hole, its list sync and metrics exporter | any number of hosts  |
 | `unifi`         | UnPoller (that site's UniFi metrics)        | one host per site    |
 | `smart`         | smartctl_exporter (NVMe/disk health)        | hosts with such a disk |
 
@@ -65,7 +65,11 @@ household device uses depends on the other site or on Tailscale.
 - **Observability**: every host's Alloy collects host, container, Traefik and
   labelled service metrics, WAN probes, Docker logs and the systemd journal,
   and pushes them over the tailnet to the one Prometheus and Loki. Add
-  metrics for any container with a `homelab.metrics.port` label.
+  metrics for any container with a `homelab.metrics.port` label. Only
+  metrics on Alloy's allowlist are kept (see [Day to day](#day-to-day)).
+  Grafana's dashboards are provisioned from git: *Homelab overview* (hosts,
+  disks, containers, network), *Pi-hole*, and UnPoller's *UniFi* set (sites,
+  access points, switches, clients, gateway).
 - **Alerting**: Grafana alert rules (`provisioning/alerting/`) notify through
   ntfy, which phones reach from anywhere: hosts down, disk, memory,
   temperature, undervoltage, scrape targets, logs that stop, deploys,
@@ -160,8 +164,10 @@ Everything outside the Pis, in the order you need it.
    Make sure NAT hairpinning works, so `ntfy.…` also resolves to something
    reachable from inside the LAN.
 10. For the `unifi` profile, a local API key (*Settings → Control Plane →
-    Integrations*) → `UNIFI_API_KEY` in that host's `hosts/<name>.secrets.env`,
-    and `UNIFI_URL` in its settings.
+    Integrations*) → `UNIFI_API_KEY` in that host's `hosts/<name>.secrets.env`
+    (push it before enabling the profile, or the deploy fails for want of
+    it), and `UNIFI_URL` in its settings: the console, usually the site's
+    gateway (`https://192.168.1.1`).
 
 **After the hosts are up**
 
@@ -186,7 +192,8 @@ Let's Encrypt needs no setup; Traefik registers automatically.
    `bootstrap.sh` over, which installs Docker, clones this repo over HTTPS,
    installs the host's `.env` and enables the deploy timer; then it runs the
    first deploy and shows the result. sudo may ask for your password. The
-   Pi then reboots once, to turn on the memory cgroup.
+   Pi then reboots once, for the settings that need it (the memory cgroup,
+   zram-only swap, a PoE fan curve).
 5. If this is the first `sso` host, set up SSO (below) right away.
 
 Both `provision.sh` and `push-env.sh` refuse to run unless `hosts/<name>.env`
@@ -196,7 +203,7 @@ which keys changed, without printing any values. `provision.sh` refuses a
 host that's already provisioned; after a re-image it runs again.
 
 `bootstrap.sh` is idempotent. Every deploy re-runs it when it, `lib.sh`,
-`systemd/`, `config/sdcard.env`, the host's settings or its `.env` changed
+`systemd/`, `config/`, the host's settings or its `.env` changed
 since its last successful run, so a commit that changes host-level settings
 reaches every host like any other. It:
 
@@ -273,7 +280,9 @@ Upgrades run daily at 04:00, after the 03:30 backups. That covers Debian
 (including security and point-release updates), the Raspberry Pi repo
 (kernel, firmware, bootloader) and Docker. When an update needs a reboot, the
 Pi reboots at 04:30. A reboot means a minute or two without DNS from that Pi.
-Docker engine upgrades don't stop containers (`live-restore`).
+Docker engine upgrades don't stop containers (`live-restore`), but they do
+replace Docker's socket, so the next sync restarts `docker-proxy`, which
+still has the old one mounted.
 
 "OS auto-update failed" and "Reboot pending" (more than 2 days) alerts cover
 the failure cases. These are host-level settings applied by `bootstrap.sh`,
@@ -299,8 +308,10 @@ Always on, since they only remove waste:
 - Grafana's SQLite in WAL mode, with dashboard rescans hourly instead of
   every minute (deploys recreate Grafana when dashboards change anyway)
 - Alloy forwards only the metrics an alert or dashboard uses (an allowlist
-  in `config.alloy`; add to it before charting something new), which cuts
-  Prometheus to a few hundred series per host
+  in `config.alloy`), which keeps Prometheus to a few hundred series per
+  host; UnPoller's, kept whole, add a few thousand for a UniFi site.
+  Prometheus stores them all on the observability host, not the one they
+  come from
 - the Docker API proxy logs warnings only, instead of every call
 
 `config/sdcard.env` sends Docker's copy of container logs to the
@@ -323,8 +334,8 @@ it's being spent, as in the SRE workbook's
 
 The long window ignores bursts: a morning of apt updates writes about half a
 GB, which once tripped a plain six-hour average. The short window clears the
-alert soon after the writing stops. The dashboard's Disk section shows each
-disk's writes per day and which containers they come from.
+alert soon after the writing stops. The *Homelab overview* dashboard's Disk
+section shows each disk's writes per day and which containers they come from.
 NVMe drives aren't held to that: a few GB a day is nothing against their
 rated endurance, so the `smart` profile watches their wear instead ("Disk
 wearing out").
@@ -346,8 +357,11 @@ working; households never notice.
 
 Blocklists and allowed domains are in git
 ([`stacks/pihole/lists/`](stacks/pihole/lists)) and every Pi-hole applies them
-on each deploy and hourly; changes to them in the web UI are undone. Anything
-else changed in the UI (groups, clients) lives only in that Pi-hole's volume.
+on each deploy and hourly; changes to them in the web UI are undone. Pi-hole
+settings can be pinned with `FTLCONF_*` variables, but its lists live in its
+database with no config equivalent, so the `pihole-lists` sidecar applies
+them through Pi-hole's API. Anything else changed in the UI (groups, clients)
+lives only in that Pi-hole's volume.
 
 ### Backups and moving services
 
@@ -383,6 +397,8 @@ start over on the new host.
 |------|-----|
 | Change a service | Edit `stacks/…`, open a PR, merge |
 | Add a service | Add it to a stack (or a new `stacks/<x>/compose.yaml` listed in `compose.yaml`) with a `profiles:` entry, Traefik labels (`sso@docker` for admin pages) and optionally `homelab.metrics.port` |
+| Chart or alert on a new metric | Add it to the `keep` allowlist in `stacks/alloy/config/config.alloy` first; anything not on it never reaches Prometheus |
+| Add a dashboard | Commit its JSON to `stacks/observability/grafana/dashboards/`; Grafana won't save UI edits to those, so export a change and commit it |
 | Enable something on a host | Add its profile to `COMPOSE_PROFILES` in `hosts/<name>.env`, open a PR, merge |
 | Move a service | See [Backups and moving services](#backups-and-moving-services) |
 | Change a host setting | Edit `hosts/<name>.env` or `config/common.env`, open a PR, merge |
@@ -391,7 +407,7 @@ start over on the new host.
 | Roll back | `git revert` and push |
 | Deploy now | On the host, `sudo /opt/homelab/scripts/sync.sh --force` (otherwise within a minute) |
 | Validate locally | `scripts/validate.sh` (needs Docker) |
-| Smoke-test the whole stack | `test/smoke.sh` on any Docker host with ports 80/443/8443/1053 free (`--down` to remove) |
+| Smoke-test the whole stack | `test/smoke.sh` on your own machine (Docker Desktop) with ports 80/443/8443/1053 free; `--down` removes it. **Never on a Pi:** it uses the same `homelab` project, and `--down` deletes its volumes |
 
 A secret needed only by one profile can't use `${VAR:?}` in compose, because
 compose interpolates services whose profiles are off. Add it to
@@ -429,17 +445,22 @@ stacks/traefik/           reverse proxy + ACME + Docker API proxy + this host's 
 stacks/tailscale/         tailnet membership
 stacks/alloy/             metrics and logs from this host
 stacks/auth/              Pocket ID (profile: sso) with backup and restore, tinyauth
-stacks/pihole/            profile: dns, with lists from git
-stacks/observability/     profile: observability (prometheus, loki, grafana, ntfy)
-stacks/unifi/             profile: unifi
+stacks/pihole/            profile: dns (Pi-hole, list sync from git, exporter)
+stacks/observability/     profile: observability (Prometheus, Loki, Grafana with
+                          its dashboards and alert rules, ntfy)
+stacks/unifi/             profile: unifi (UnPoller)
 stacks/smart/             profile: smart (locally built image)
 scripts/provision.sh      set up a freshly imaged host (runs bootstrap)
+scripts/move-to-nvme.sh   install onto the NVMe, for provision.sh
 scripts/push-env.sh       push a host's secrets and deploy
 scripts/bootstrap.sh      idempotent host provisioning, on the host
 scripts/sync.sh           git poll → apply (systemd timer)
 scripts/apply.sh          docker compose converge
+scripts/lib.sh            shared by the scripts: settings layering, reboot flags
 scripts/gen-secrets.sh    generate secrets
 scripts/validate.sh       lint/verify (CI + local)
 test/smoke.sh             end-to-end test on Docker Desktop (local.env, compose.local.yaml)
 systemd/                  sync service + timer
+renovate.json5            image updates: 14-day minimum age, patches auto-merge
+.github/workflows/        CI: validate.sh on every push and PR
 ```
