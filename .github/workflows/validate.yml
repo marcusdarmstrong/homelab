@@ -1,6 +1,6 @@
 # Hosts deploy main within a minute of a push, so catch broken config before
-# it gets there. Protect main and require this check on PRs (including
-# Renovate's).
+# it gets there. A ruleset on main requires this check for PRs, including
+# Renovate's, which auto-merge once it passes (README → External setup).
 name: validate
 
 on:

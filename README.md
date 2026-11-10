@@ -86,8 +86,11 @@ Everything outside the Pis, in the order you need it.
 **Once**
 
 1. **GitHub.** This repo. Once CI has run:
-   - Protect `main` and require the `validate` check, since a merge deploys
-     within a minute.
+   - Add a ruleset on `main` requiring the `validate` check, with the
+     *Repository admin* role allowed to bypass it: a merge deploys within a
+     minute, so PRs must pass CI, while you can still push directly.
+   - Turn on *Settings → General → Allow auto-merge*, so Renovate's patch
+     updates merge as soon as `validate` passes rather than on its next run.
    - Install the [Renovate](https://github.com/apps/renovate) app on the repo
      for image-update PRs.
 2. **Cloudflare DNS.** A zone holding `HOMELAB_DOMAIN`, and an API token with
