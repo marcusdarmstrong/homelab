@@ -9,6 +9,9 @@
 #
 # One entry per line; blank lines and # comments are ignored.
 set -euo pipefail
+# sync runs in $(...), where bash would otherwise ignore a failed API call
+# and carry on reporting changes it didn't make.
+shopt -s inherit_errexit
 
 api=http://pihole/api
 dir="$(dirname "$0")"
