@@ -110,9 +110,8 @@ unstable="$(awk '$4 == "true" { next }
 # Once the deploy has converged, the images it replaced are unused: remove
 # every image no container uses, not just untagged ones, so each upgrade
 # doesn't leave the old version (up to 2 GB for Grafana's renderer) behind.
-# Going back to a version pulls it again. Build cache that no build has used
-# for a week goes too; locally built images rebuild on every deploy, so
-# theirs stays.
+# Going back to a version pulls it again. (Build cache is left alone: images
+# built here rebuild on every deploy and need it, and the builder's age and
+# size filters don't reclaim old builds' layers anyway.)
 docker image prune -af >/dev/null
-docker builder prune -f --filter until=168h >/dev/null
 log "converged"
