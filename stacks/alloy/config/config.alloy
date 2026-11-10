@@ -236,6 +236,8 @@ prometheus.relabel "keep" {
 			"node;node_hwmon_(chip_names|temp_celsius|pwm|fan_rpm|curr_amps|in_lcrit_alarm_volts)",
 			"cadvisor;container_(cpu_usage_seconds_total|memory_working_set_bytes|fs_writes_bytes_total)",
 			"wan;probe_(success|duration_seconds)",
+			// Whether logs are still being read and sent ("Logs stopped").
+			"alloy;loki_(source_docker_target_entries_total|source_journal_target_lines_total|write_sent_entries_total)",
 			"traefik;traefik_(tls_certs_not_after|service_requests_total|service_request_duration_seconds_(sum|count))",
 			"(smartctl-exporter|unpoller);.+",
 		], "|")
@@ -248,6 +250,15 @@ prometheus.relabel "keep" {
 		separator     = ";"
 		regex         = "node_network_.+;(lo|docker0|br-.+|veth.+)"
 		action        = "drop"
+	}
+
+	// loki.write labels its counters with Loki's host name, which would
+	// shadow this host's; there's only the one endpoint.
+	rule {
+		source_labels = ["__name__"]
+		regex         = "loki_write_.+"
+		target_label  = "host"
+		replacement   = ""
 	}
 }
 

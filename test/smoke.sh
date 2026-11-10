@@ -110,7 +110,8 @@ jobs_up() { [[ "$(promql 'count by (job) (up == 1)' | json '" ".join(sorted(r["m
 if wait_for 120 jobs_up; then pass "scrape jobs up: $expected_jobs"; else
   fail "scrape jobs up (have: $(promql 'count by (job) (up == 1)' | json '" ".join(sorted(r["metric"]["job"] for r in d["data"]["result"]))'))"
 fi
-check "WAN probes distinguishable" test "$(promql 'count(probe_success{job="wan",probe!=""})' | json 'd["data"]["result"][0]["value"][1]')" = 3
+wan_probes() { [[ "$(promql 'count(probe_success{job="wan",probe!=""})' | json 'd["data"]["result"][0]["value"][1]')" == 3 ]]; }
+check "WAN probes distinguishable" wait_for 60 wan_probes
 check "series carry host/site labels" test "$(promql 'count(up{host="local",site="local"})' | json 'd["data"]["result"][0]["value"][1]')" -gt 0
 # Services that log steadily; quieter ones may have said everything before
 # Traefik routed Loki's push API, and Alloy drops what's refused.
@@ -123,8 +124,8 @@ for uid in prometheus loki; do
   check "datasource $uid healthy" test "$(grafana "/api/datasources/uid/$uid/health" | json 'd["status"]')" = OK
 done
 check "overview dashboard provisioned" test "$(grafana '/api/search?type=dash-db' | json 'len(d)')" -ge 1
-rules_ok() { [[ "$(grafana /api/prometheus/grafana/api/v1/rules | json 'sum(r["health"]=="ok" for g in d["data"]["groups"] for r in g["rules"])')" -ge 19 ]]; }
-check "19 alert rules evaluating" wait_for 120 rules_ok
+rules_ok() { [[ "$(grafana /api/prometheus/grafana/api/v1/rules | json 'sum(r["health"]=="ok" for g in d["data"]["groups"] for r in g["rules"])')" -ge 20 ]]; }
+check "20 alert rules evaluating" wait_for 120 rules_ok
 # Annotation templates are only rendered at evaluation time, so a broken one
 # shows up in the logs rather than in rule health.
 check "alert templates render" test "$(docker compose logs grafana --since 2m 2>&1 | grep -c 'Error in expanding template')" = 0

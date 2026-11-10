@@ -788,7 +788,7 @@
             "severity": "critical"
           },
           "annotations": {
-            "summary": "{{ $labels.service }} is rejecting {{ humanizePercentage $values.A.Value }} of what the hosts push; the sending host's Alloy logs the reason (journalctl | grep non-recoverable)"
+            "summary": "{{ $labels.service }} is rejecting {{ with $values.A }}{{ humanizePercentage .Value }}{{ end }} of what the hosts push; the sending host's Alloy logs the reason (journalctl | grep non-recoverable)"
           },
           "data": [
             {
@@ -836,7 +836,7 @@
             "severity": "warning"
           },
           "annotations": {
-            "summary": "{{ $labels.service }} has rejected {{ humanizePercentage $values.A.Value }} of what the hosts pushed over 3 days, over its 1% budget; the sending host's Alloy logs the reason (journalctl | grep non-recoverable)"
+            "summary": "{{ $labels.service }} has rejected {{ with $values.A }}{{ humanizePercentage .Value }}{{ end }} of what the hosts pushed over 3 days, over its 1% budget; the sending host's Alloy logs the reason (journalctl | grep non-recoverable)"
           },
           "data": [
             {
@@ -850,6 +850,54 @@
                 "refId": "A",
                 "instant": true,
                 "expr": "label_replace(sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[3d])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[3d])) > 0.01 and sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\", code!~\"2..\"}[6h])) / sum by (service) (rate(traefik_service_requests_total{service=~\"(prometheus|loki)@docker\", method=\"POST\"}[6h])) > 0.01, \"service\", \"$1\", \"service\", \"(.+)@docker\")"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "logs-stopped",
+          "title": "Logs stopped",
+          "condition": "C",
+          "for": "10m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "labels": {
+            "severity": "warning"
+          },
+          "annotations": {
+            "summary": "{{ $labels.host }}: Alloy is running but hasn't read or sent {{ $labels.logs }} logs for 30 minutes; see its errors with journalctl | grep loki"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "datasourceUid": "prometheus",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "model": {
+                "refId": "A",
+                "instant": true,
+                "expr": "label_replace(group by (host) (up{job=\"alloy\"} == 1) unless group by (host) (increase(loki_source_docker_target_entries_total[30m]) > 0), \"logs\", \"container\", \"\", \"\") or label_replace(group by (host) (up{job=\"alloy\"} == 1) unless group by (host) (increase(loki_source_journal_target_lines_total[30m]) > 0), \"logs\", \"journal\", \"\", \"\") or label_replace(group by (host) (up{job=\"alloy\"} == 1) unless group by (host) (increase(loki_write_sent_entries_total[30m]) > 0), \"logs\", \"any\", \"\", \"\")"
               }
             },
             {

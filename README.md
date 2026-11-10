@@ -68,9 +68,9 @@ household device uses depends on the other site or on Tailscale.
   metrics for any container with a `homelab.metrics.port` label.
 - **Alerting**: Grafana alert rules (`provisioning/alerting/`) notify through
   ntfy, which phones reach from anywhere: hosts down, disk, memory,
-  temperature, undervoltage, scrape targets, deploys, backups, cert expiry,
-  WAN, SMART and OS updates. Two budgets are alerted on by how fast they're
-  being spent (multiwindow, multi-burn-rate, as in the
+  temperature, undervoltage, scrape targets, logs that stop, deploys,
+  backups, cert expiry, WAN, SMART and OS updates. Two budgets are alerted
+  on by how fast they're being spent (multiwindow, multi-burn-rate, as in the
   [SRE workbook](https://sre.google/workbook/alerting-on-slos/#6-multiwindow-multi-burn-rate-alerts)):
   SD-card writes (see SD-card hosts) and pushes to Prometheus and Loki, 99% of
   which should be accepted. healthchecks.io notices if the monitoring host
