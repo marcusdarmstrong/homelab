@@ -877,7 +877,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^unpoller_device_uplink_speed_mbps{instance=\"UniFi-Poller:9130\", job=\"unpoller\", name=\"gateway\", port=\"all\", site_name=\"Home (default)\", source=\"https://unifi-controller:8443\"}$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
@@ -957,7 +957,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^unpoller_device_stations{instance=\"UniFi-Poller:9130\", job=\"unpoller\", name=\"gateway\", site_name=\"Home (default)\", source=\"https://unifi-controller:8443\", station_type=\"desktop\", type=\"ugw\"}$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
@@ -1038,7 +1038,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^unpoller_device_stations{instance=\"UniFi-Poller:9130\", job=\"unpoller\", name=\"gateway\", site_name=\"Home (default)\", source=\"https://unifi-controller:8443\", station_type=\"user\", type=\"ugw\"}$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
@@ -1118,7 +1118,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^unpoller_device_stations{instance=\"UniFi-Poller:9130\", job=\"unpoller\", name=\"gateway\", site_name=\"Home (default)\", source=\"https://unifi-controller:8443\", station_type=\"mobile\", type=\"ugw\"}$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
@@ -1199,7 +1199,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^unpoller_device_stations{instance=\"UniFi-Poller:9130\", job=\"unpoller\", name=\"gateway\", site_name=\"Home (default)\", source=\"https://unifi-controller:8443\", station_type=\"guest\", type=\"ugw\"}$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
@@ -1279,7 +1279,7 @@
           "calcs": [
             "lastNotNull"
           ],
-          "fields": "/^unpoller_device_stations{instance=\"UniFi-Poller:9130\", job=\"unpoller\", name=\"gateway\", site_name=\"Home (default)\", source=\"https://unifi-controller:8443\", station_type=\"handheld\", type=\"ugw\"}$/",
+          "fields": "",
           "values": false
         },
         "showPercentChange": false,
