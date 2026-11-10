@@ -3,10 +3,13 @@
 #
 # Authenticates with a UniFi API key (UniFi Network > Settings > Control
 # Plane > Integrations), so no controller account or password is involved.
+#
+# Grafana's "UniFi ..." dashboards (sites, access points, switches, clients,
+# gateway) are UnPoller's own, from github.com/unpoller/dashboards.
 
 services:
   unpoller:
-    image: ghcr.io/unpoller/unpoller:v5.4.0
+    image: ghcr.io/unpoller/unpoller:v5.8.3
     restart: unless-stopped
     profiles: [unifi]
     security_opt:
