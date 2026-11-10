@@ -78,24 +78,29 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       # SQLite WAL mode: far fewer page and journal rewrites per write.
       GF_DATABASE_WAL: "true"
-      # Alert state is saved on this interval rather than after every
-      # evaluation, which rewrites a row per rule; config/sdcard.env sets 5m.
+      # Plugins are only those in the image, so they change with its tag
+      # (Renovate) and not on their own: Grafana would otherwise download
+      # its "preinstall" set from grafana.com on every start and keep it
+      # updated. The empty plugins directory (tmpfs, below) hides what
+      # earlier versions downloaded into the volume.
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
       # Each bundled data source runs as its own process (25-35 MB each), and
-      # only Prometheus and Loki are used; disabled plugins aren't installed
-      # or started. The Pyroscope and Traces apps need data sources disabled
-      # here. Drop one from this list to use it.
+      # only Prometheus and Loki are used. Drop one from this list to use it.
       GF_PLUGINS_DISABLE_PLUGINS: >-
-        cloudwatch,elasticsearch,grafana-postgresql-datasource,grafana-pyroscope-datasource,influxdb,jaeger,mssql,mysql,opentsdb,stackdriver,tempo,zipkin,grafana-pyroscope-app,grafana-exploretraces-app
+        cloudwatch,elasticsearch,grafana-postgresql-datasource,grafana-pyroscope-datasource,influxdb,jaeger,mssql,mysql,opentsdb,stackdriver,tempo,zipkin
       # Quiet the per-query lines (two for every panel and alert query, about
       # 30k a day) and 13.3's search manifest watcher, which warns every
       # minute that no app plugin publishes search manifests.
       GF_LOG_FILTERS: search-manifest-watcher:error plugin.prometheus:warn plugin.loki:warn query_data:warn
+      # Alert state is saved on this interval rather than after every
+      # evaluation, which rewrites a row per rule; config/sdcard.env sets 5m.
       # Toggle names are case-sensitive here.
       GF_FEATURE_TOGGLES_alertingSaveStatePeriodic: "true"
+      GF_UNIFIED_ALERTING_STATE_PERIODIC_SAVE_INTERVAL: ${GRAFANA_ALERT_STATE_SAVE_INTERVAL:-1m}
       # The X-XSS-Protection header is obsolete (browsers ignore it) and
       # Grafana warns at startup that it's going away.
       GF_SECURITY_X_XSS_PROTECTION: "false"
-      GF_UNIFIED_ALERTING_STATE_PERIODIC_SAVE_INTERVAL: ${GRAFANA_ALERT_STATE_SAVE_INTERVAL:-1m}
       # Pocket ID is the only way in: no login form, no basic auth, no
       # built-in admin password to manage.
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
@@ -123,6 +128,8 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
+    tmpfs:
+      - /var/lib/grafana/plugins:size=1m
     labels:
       - traefik.enable=true
       - traefik.http.routers.grafana.rule=Host(`grafana.${HOMELAB_DOMAIN:?}`)
