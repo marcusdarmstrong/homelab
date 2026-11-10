@@ -11,7 +11,7 @@
 
 services:
   prometheus:
-    image: prom/prometheus:v3.15.0
+    image: prom/prometheus:v3.15.1
     restart: unless-stopped
     profiles: [observability]
     security_opt:
@@ -40,7 +40,7 @@ services:
       - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_PROMETHEUS:-}
 
   loki:
-    image: grafana/loki:3.7.8
+    image: grafana/loki:3.7.9
     restart: unless-stopped
     profiles: [observability]
     security_opt:
@@ -64,7 +64,7 @@ services:
       - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_LOKI:-}
 
   grafana:
-    image: grafana/grafana:13.2.3
+    image: grafana/grafana:13.3.0
     restart: unless-stopped
     profiles: [observability]
     security_opt:
@@ -120,7 +120,7 @@ services:
   # containers on the project network reach it (no Traefik route), and only
   # with the token it shares with Grafana, which refuses to start without one.
   grafana-image-renderer:
-    image: grafana/grafana-image-renderer:v5.12.6
+    image: grafana/grafana-image-renderer:v5.12.9
     restart: unless-stopped
     profiles: [observability]
     security_opt:
