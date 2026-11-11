@@ -141,7 +141,7 @@ services:
   # containers on the project network reach it (no Traefik route), and only
   # with the token it shares with Grafana, which refuses to start without one.
   grafana-image-renderer:
-    image: grafana/grafana-image-renderer:v5.12.9
+    image: grafana/grafana-image-renderer:v5.12.10
     restart: unless-stopped
     profiles: [observability]
     security_opt:
