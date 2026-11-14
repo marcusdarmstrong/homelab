@@ -11,7 +11,7 @@
 
 services:
   pihole:
-    image: pihole/pihole:2026.10.0
+    image: pihole/pihole:2026.10.1
     restart: unless-stopped
     profiles: [dns]
     # Without a password, Pi-hole's API answers only requests addressed to
@@ -57,7 +57,7 @@ services:
   # Makes the blocklists and allowed domains match lists/ on every deploy and
   # hourly after that. A failed sync exits, so a broken list fails the deploy.
   pihole-lists:
-    image: pihole/pihole:2026.10.0
+    image: pihole/pihole:2026.10.1
     restart: unless-stopped
     profiles: [dns]
     depends_on:
