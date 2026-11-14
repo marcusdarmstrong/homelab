@@ -78,7 +78,7 @@ services:
   # No healthcheck: Prometheus's `up` covers it, without Docker recording a
   # probe on SD cards every 30 seconds.
   pihole-exporter:
-    image: ekofr/pihole-exporter:v1.3.0
+    image: ekofr/pihole-exporter:v1.3.1
     restart: unless-stopped
     profiles: [dns]
     security_opt:
