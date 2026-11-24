@@ -11,7 +11,7 @@
 
 services:
   prometheus:
-    image: prom/prometheus:v3.15.1
+    image: prom/prometheus:v3.16.0
     restart: unless-stopped
     profiles: [observability]
     security_opt:
@@ -64,7 +64,7 @@ services:
       - homelab.config-hash=${CONFIG_HASH_OBSERVABILITY_LOKI:-}
 
   grafana:
-    image: grafana/grafana:13.3.0
+    image: grafana/grafana:13.3.1
     restart: unless-stopped
     profiles: [observability]
     security_opt:
