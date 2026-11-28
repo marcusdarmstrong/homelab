@@ -164,7 +164,7 @@ services:
   # entrypoint, which serves only ntfy. Nothing is readable without logging
   # in; only Grafana's token may publish.
   ntfy:
-    image: binwiederhier/ntfy:v2.37.2
+    image: binwiederhier/ntfy:v2.38.0
     restart: unless-stopped
     profiles: [observability]
     security_opt:
